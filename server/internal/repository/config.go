@@ -115,6 +115,7 @@ func (r *configRepository) SoftDelete(ctx context.Context, id uint64, version ui
 // ConfigHistoryRepository 配置历史数据访问（追加式）。
 type ConfigHistoryRepository interface {
 	Create(ctx context.Context, h *model.ConfigHistory) error
+	GetByID(ctx context.Context, id uint64) (*model.ConfigHistory, error)
 	ListByConfigID(ctx context.Context, configID uint64) ([]*model.ConfigHistory, error)
 	LatestByConfigID(ctx context.Context, configID uint64) (*model.ConfigHistory, error)
 }
@@ -125,6 +126,12 @@ type configHistoryRepository struct {
 
 func (r *configHistoryRepository) Create(ctx context.Context, h *model.ConfigHistory) error {
 	return mapError(r.q.ConfigHistory.WithContext(ctx).Create(h))
+}
+
+func (r *configHistoryRepository) GetByID(ctx context.Context, id uint64) (*model.ConfigHistory, error) {
+	ch := r.q.ConfigHistory
+	m, err := ch.WithContext(ctx).Where(ch.ID.Eq(id)).First()
+	return m, mapError(err)
 }
 
 func (r *configHistoryRepository) ListByConfigID(ctx context.Context, configID uint64) ([]*model.ConfigHistory, error) {

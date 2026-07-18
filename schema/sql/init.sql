@@ -20,7 +20,7 @@ CREATE TABLE `configs` (
   `id`           BIGINT UNSIGNED NOT NULL COMMENT '雪花算法主键ID',
   `namespace_id` BIGINT UNSIGNED NOT NULL COMMENT '关联命名空间ID',
   `config_name`  VARCHAR(255) NOT NULL COMMENT '配置名称，如 app / db',
-  `format`       VARCHAR(64)  NOT NULL DEFAULT 'json' COMMENT '配置格式：json/yaml/text/properties',
+  `format`       TINYINT      NOT NULL DEFAULT 1 COMMENT '配置格式：1=json, 2=yaml, 3=text, 4=properties',
   `content`      LONGTEXT     NOT NULL COMMENT '配置内容全文，支持任意格式文本',
   `description`  VARCHAR(255) NOT NULL DEFAULT '' COMMENT '配置说明',
   `created_by`   VARCHAR(64)  NOT NULL DEFAULT '' COMMENT '创建人（Casdoor用户名）',

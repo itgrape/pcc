@@ -35,7 +35,7 @@ func newConfig(db *gorm.DB, opts ...gen.DOOption) config {
 	_config.DeletedAt = field.NewField(tableName, "deleted_at")
 	_config.NamespaceID = field.NewUint64(tableName, "namespace_id")
 	_config.ConfigName = field.NewString(tableName, "config_name")
-	_config.Format = field.NewString(tableName, "format")
+	_config.Format = field.NewInt8(tableName, "format")
 	_config.Content = field.NewString(tableName, "content")
 	_config.Description = field.NewString(tableName, "description")
 	_config.CreatedBy = field.NewString(tableName, "created_by")
@@ -57,7 +57,7 @@ type config struct {
 	DeletedAt   field.Field
 	NamespaceID field.Uint64
 	ConfigName  field.String
-	Format      field.String
+	Format      field.Int8
 	Content     field.String
 	Description field.String
 	CreatedBy   field.String
@@ -85,7 +85,7 @@ func (c *config) updateTableName(table string) *config {
 	c.DeletedAt = field.NewField(table, "deleted_at")
 	c.NamespaceID = field.NewUint64(table, "namespace_id")
 	c.ConfigName = field.NewString(table, "config_name")
-	c.Format = field.NewString(table, "format")
+	c.Format = field.NewInt8(table, "format")
 	c.Content = field.NewString(table, "content")
 	c.Description = field.NewString(table, "description")
 	c.CreatedBy = field.NewString(table, "created_by")

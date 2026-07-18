@@ -1,0 +1,37 @@
+# macOS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# macOS Finder
+*.swp
+*.swo
+
+# Temporary files
+*~
+.tmp
+
+# IDE and editors
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Environment (never commit real secrets; .env.example is tracked)
+.env
+.env.*
+!.env.example
+!.env.development
+
+# AI
+.claude
+.codex
