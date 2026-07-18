@@ -21,25 +21,51 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   token: localStorage.getItem("casdoor_token"),
   user: null,
   isInitializing: true,
-  isAuthenticated: false,
+  isAuthenticated: !!localStorage.getItem("casdoor_token"),
 
   login: () => {
     sdk.signin_redirect()
   },
 
   handleCallback: async () => {
+    const params = new URLSearchParams(window.location.search)
+    const code = params.get("code")
+    const verifier = sessionStorage.getItem("pkce_code_verifier") || ""
+
+    // 走 /casdoor-proxy 避免跨域问题
+    const resp = await fetch("/casdoor-proxy/api/login/oauth/access_token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        grant_type: "authorization_code",
+        code: code || "",
+        client_id: import.meta.env.VITE_CASDOOR_CLIENT_ID || "",
+        redirect_uri: `${window.location.origin}/callback`,
+        code_verifier: verifier,
+      }),
+    })
+
+    if (!resp.ok) {
+      throw new Error(`Token exchange failed: ${resp.status}`)
+    }
+
+    const data = await resp.json()
+    const token = data.access_token
+    if (!token) {
+      throw new Error("No access_token in response")
+    }
+
+    localStorage.setItem("casdoor_token", token)
+    sessionStorage.clear()
+    set({ token, isAuthenticated: true })
+
+    // 获取用户信息
     try {
-      const tokenResponse = await sdk.exchangeForAccessToken()
-      const token = tokenResponse.access_token
-      if (token) {
-        localStorage.setItem("casdoor_token", token)
-        set({ token, isAuthenticated: true })
-      } else {
-        get().logout()
-      }
-    } catch (error) {
-      console.error("Callback failed:", error)
-      get().logout()
+      const res = await getUserInfo()
+      const user = (res?.data as unknown as { data?: UserInfo })?.data ?? null
+      set({ user, isInitializing: false })
+    } catch {
+      set({ isInitializing: false })
     }
   },
 
@@ -60,7 +86,8 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
       const user = (res?.data as unknown as { data?: UserInfo })?.data ?? null
       set({ user, isAuthenticated: true, isInitializing: false })
     } catch {
-      set({ isInitializing: false })
+      localStorage.removeItem("casdoor_token")
+      set({ token: null, isAuthenticated: false, isInitializing: false })
     }
   },
 }))

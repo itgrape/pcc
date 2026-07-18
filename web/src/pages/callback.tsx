@@ -5,44 +5,35 @@ import { Loader2 } from "lucide-react"
 
 export default function CallbackPage() {
   const navigate = useNavigate()
+  const { handleCallback } = useAuthStore()
 
   useEffect(() => {
     const code = new URLSearchParams(window.location.search).get("code")
+    const state = new URLSearchParams(window.location.search).get("state")
     if (!code) {
       navigate("/login", { replace: true })
       return
     }
 
-    // 先清除旧 token，避免干扰
+    const storedState = sessionStorage.getItem("pkce_state")
+    if (storedState && state && state !== storedState) {
+      console.error("State mismatch, possible CSRF attack")
+      navigate("/login", { replace: true })
+      return
+    }
+
+    // 清除旧 token，避免干扰
     localStorage.removeItem("casdoor_token")
 
-    const verifier = sessionStorage.getItem("pkce_code_verifier") || ""
-
-    fetch("/casdoor-proxy/api/login/oauth/access_token", {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
-        grant_type: "authorization_code",
-        code,
-        client_id: import.meta.env.VITE_CASDOOR_CLIENT_ID || "",
-        redirect_uri: `${window.location.origin}/callback`,
-        code_verifier: verifier,
-      }),
-    })
-      .then((r) => r.json())
-      .then((data) => {
-        if (!data.access_token) throw new Error("no access_token")
-
-        const t = data.access_token
-        localStorage.setItem("casdoor_token", t)
-        sessionStorage.clear()
-        useAuthStore.setState({ token: t, user: null, isAuthenticated: true, isInitializing: false })
+    handleCallback()
+      .then(() => {
         navigate("/", { replace: true })
       })
-      .catch(() => {
+      .catch((err) => {
+        console.error("Login callback failed:", err)
         navigate("/login", { replace: true })
       })
-  }, [navigate])
+  }, [navigate, handleCallback])
 
   return (
     <div className="flex items-center justify-center h-screen">
