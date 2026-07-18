@@ -30,7 +30,6 @@ pids
 .env
 .env.*
 !.env.example
-!.env.development
 
 # AI
 .claude
