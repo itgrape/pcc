@@ -34,7 +34,7 @@ type AccessKeyNamespace struct {
 }
 
 type GrantNamespaceReq struct {
-	NamespaceID uint64 `json:"namespace_id" binding:"required"`
+	NamespaceID string `json:"namespace_id" binding:"required"`
 	Permission  int    `json:"permission" binding:"required"`
 }
 

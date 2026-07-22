@@ -19,12 +19,16 @@ import {
   useUpdateAccessKey,
   useDeleteAccessKey,
   useListKeyNamespaces,
-  useGrantKeyNamespace,
   useRevokeKeyNamespace,
+  grantKeyNamespace,
+  listKeyNamespaces,
+  revokeKeyNamespace,
+  updateKeyNamespacePermission,
   getListAccessKeysQueryKey,
   getListKeyNamespacesQueryKey,
 } from "@/lib/orval/access-keys/access-keys"
 import { useListNamespaces } from "@/lib/orval/namespaces/namespaces"
+import { apiId, unwrapData } from "@/shared/api/response"
 
 interface AccessKeyItem {
   id: string
@@ -73,13 +77,20 @@ export default function AccessKeysPage() {
 
   const [createForm, setCreateForm] = useState({ description: "" })
   const [editForm, setEditForm] = useState({ description: "", status: "1" })
-  const [grantForm, setGrantForm] = useState({ namespace_id: "", permission: "2" })
+  const [grantForm, setGrantForm] = useState({ namespace_ids: [] as string[], permission: "2" })
+  const [existingGrants, setExistingGrants] = useState<AKNamespace[]>([])
+  const [grantLoading, setGrantLoading] = useState(false)
+  const [grantSaving, setGrantSaving] = useState(false)
+  const [grantError, setGrantError] = useState("")
   const [createdKey, setCreatedKey] = useState<AccessKeyCreated | null>(null)
 
   const params = { page, page_size: 20, keyword: search || undefined }
   const { data, isLoading } = useListAccessKeys(params)
   const { data: nsRes } = useListNamespaces({ page: 1, page_size: 100 })
-  const { data: keyNsRes } = useListKeyNamespaces(Number(detailKey?.id))
+  const { data: keyNsRes } = useListKeyNamespaces(
+    apiId(detailKey?.id ?? "0"),
+    { query: { enabled: Boolean(detailKey) } },
+  )
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: getListAccessKeysQueryKey() })
   const invalidateKeyNamespaces = (keyId: number) =>
@@ -88,7 +99,6 @@ export default function AccessKeysPage() {
   const { mutate: createMutate } = useCreateAccessKey()
   const { mutate: updateMutate } = useUpdateAccessKey()
   const { mutate: deleteMutate } = useDeleteAccessKey()
-  const { mutate: grantMutate } = useGrantKeyNamespace()
   const { mutate: revokeMutate } = useRevokeKeyNamespace()
 
   const akData = data?.data as unknown as { data?: { list: unknown[]; total: number } } | undefined
@@ -97,10 +107,96 @@ export default function AccessKeysPage() {
   const allNamespaces = ((nsRes?.data as unknown as { data?: { list: NamespaceItem[] } })?.data?.list ?? []) as NamespaceItem[]
   const keyNss = ((keyNsRes?.data as unknown as { data?: AKNamespace[] })?.data ?? []) as AKNamespace[]
 
-  const copyToClipboard = (text: string, id: string) => {
-    navigator.clipboard.writeText(text)
+  const copyToClipboard = async (text: string, id: string) => {
+    if (!text) return
+    try {
+      await navigator.clipboard.writeText(text)
+    } catch {
+      const textarea = document.createElement("textarea")
+      textarea.value = text
+      textarea.style.position = "fixed"
+      textarea.style.opacity = "0"
+      document.body.appendChild(textarea)
+      textarea.select()
+      document.execCommand("copy")
+      textarea.remove()
+    }
     setCopied(id)
-    setTimeout(() => setCopied(""), 2000)
+    window.setTimeout(() => setCopied(""), 2000)
+  }
+
+  const openGrantDialog = async (key: AccessKeyItem) => {
+    setGrantKey(key)
+    setGrantOpen(true)
+    setGrantLoading(true)
+    setGrantError("")
+    try {
+      const response = await listKeyNamespaces(apiId(key.id))
+      const grants = unwrapData<AKNamespace[]>(response)
+      setExistingGrants(grants)
+      setGrantForm({
+        namespace_ids: grants.map((grant) => grant.namespace_id),
+        permission: grants[0] ? String(grants[0].permission) : "2",
+      })
+    } catch {
+      setGrantError("命名空间授权加载失败")
+    } finally {
+      setGrantLoading(false)
+    }
+  }
+
+  const toggleGrantNamespace = (namespaceId: string) => {
+    setGrantForm((current) => ({
+      ...current,
+      namespace_ids: current.namespace_ids.includes(namespaceId)
+        ? current.namespace_ids.filter((id) => id !== namespaceId)
+        : [...current.namespace_ids, namespaceId],
+    }))
+  }
+
+  const saveNamespaceGrants = async () => {
+    if (!grantKey) return
+    setGrantSaving(true)
+    setGrantError("")
+    const selected = new Set(grantForm.namespace_ids)
+    const existing = new Map(existingGrants.map((grant) => [grant.namespace_id, grant]))
+    const permission = Number(grantForm.permission)
+
+    try {
+      const operations: Promise<unknown>[] = []
+      for (const namespaceId of selected) {
+        const current = existing.get(namespaceId)
+        if (!current) {
+          operations.push(grantKeyNamespace(apiId(grantKey.id), {
+            namespace_id: apiId(namespaceId),
+            permission,
+          }))
+        } else if (current.permission !== permission) {
+          operations.push(
+            updateKeyNamespacePermission(
+              apiId(grantKey.id),
+              apiId(namespaceId),
+              { permission },
+            ),
+          )
+        }
+      }
+      for (const grant of existingGrants) {
+        if (!selected.has(grant.namespace_id)) {
+          operations.push(
+            revokeKeyNamespace(apiId(grantKey.id), apiId(grant.namespace_id)),
+          )
+        }
+      }
+      await Promise.all(operations)
+      invalidate()
+      invalidateKeyNamespaces(apiId(grantKey.id))
+      setGrantOpen(false)
+    } catch {
+      setGrantError("授权保存失败，请检查命名空间是否已被删除")
+    } finally {
+      setGrantSaving(false)
+    }
   }
 
   return (
@@ -127,7 +223,7 @@ export default function AccessKeysPage() {
                     <Label>Access Key</Label>
                     <div className="flex gap-2">
                       <Input readOnly value={createdKey.access_key} className="font-mono text-xs" />
-                      <Button variant="outline" size="icon" onClick={() => copyToClipboard(createdKey.access_key, "ak")}>
+                      <Button variant="outline" size="icon" onClick={() => void copyToClipboard(createdKey.access_key, "ak")}>
                         {copied === "ak" ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
                       </Button>
                     </div>
@@ -136,7 +232,7 @@ export default function AccessKeysPage() {
                     <Label>Secret</Label>
                     <div className="flex gap-2">
                       <Input readOnly value={createdKey.secret} className="font-mono text-xs" />
-                      <Button variant="outline" size="icon" onClick={() => copyToClipboard(createdKey.secret, "secret")}>
+                      <Button variant="outline" size="icon" onClick={() => void copyToClipboard(createdKey.secret, "secret")}>
                         {copied === "secret" ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
                       </Button>
                     </div>
@@ -160,7 +256,11 @@ export default function AccessKeysPage() {
                   <Button variant="outline" onClick={() => setCreateOpen(false)}>取消</Button>
                   <Button onClick={() => createMutate(
                     { data: { description: createForm.description || undefined } },
-                    { onSuccess: (res) => { setCreatedKey(res?.data as unknown as AccessKeyCreated ?? null); invalidate() } },
+                    { onSuccess: (res) => {
+                      setCreatedKey(unwrapData<AccessKeyCreated>(res))
+                      setCreateForm({ description: "" })
+                      invalidate()
+                    } },
                   )}>创建</Button>
                 </DialogFooter>
               </>
@@ -221,14 +321,14 @@ export default function AccessKeysPage() {
                     <td className="px-6 py-3 text-sm text-muted-foreground">{ak.description || "-"}</td>
                     <td className="px-6 py-3 text-sm text-muted-foreground">{ak.created_at}</td>
                     <td className="px-6 py-3 text-right">
-                      <Button variant="ghost" size="icon" onClick={() => { setGrantKey(ak); setGrantOpen(true) }}>
+                      <Button variant="ghost" size="icon" onClick={() => void openGrantDialog(ak)}>
                         <Shield className="h-4 w-4" />
                       </Button>
                       <Button variant="ghost" size="icon" onClick={() => { setEditKey(ak); setEditForm({ description: ak.description, status: String(ak.status) }); setEditOpen(true) }}>
                         <Pencil className="h-4 w-4" />
                       </Button>
                       <Button variant="ghost" size="icon" onClick={() => {
-                        if (confirm("确定删除？")) deleteMutate({ keyId: Number(ak.id) }, { onSuccess: () => invalidate() })
+                        if (confirm("确定删除？")) deleteMutate({ keyId: apiId(ak.id) }, { onSuccess: () => invalidate() })
                       }}>
                         <Trash2 className="h-4 w-4 text-destructive" />
                       </Button>
@@ -269,30 +369,25 @@ export default function AccessKeysPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditOpen(false)}>取消</Button>
             <Button onClick={() => updateMutate(
-              { keyId: Number(editKey!.id), data: { description: editForm.description || undefined, status: parseInt(editForm.status) } },
+              { keyId: apiId(editKey!.id), data: { description: editForm.description || undefined, status: parseInt(editForm.status) } },
               { onSuccess: () => { invalidate(); setEditOpen(false) } },
             )}>保存</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      <Dialog open={grantOpen} onOpenChange={setGrantOpen}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>授权命名空间</DialogTitle><DialogDescription>为 {grantKey?.access_key} 添加命名空间授权</DialogDescription></DialogHeader>
+      <Dialog open={grantOpen} onOpenChange={(open) => {
+        setGrantOpen(open)
+        if (!open) setGrantKey(null)
+      }}>
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle>管理命名空间授权</DialogTitle>
+            <DialogDescription>可同时为 {grantKey?.access_key} 绑定多个命名空间</DialogDescription>
+          </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label>命名空间</Label>
-              <Select value={grantForm.namespace_id} onValueChange={(v) => setGrantForm({ ...grantForm, namespace_id: v })}>
-                <SelectTrigger><SelectValue placeholder="选择命名空间" /></SelectTrigger>
-                <SelectContent>
-                  {allNamespaces.map((ns: NamespaceItem) => (
-                    <SelectItem key={ns.id} value={ns.id}>{ns.namespace}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>权限</Label>
+              <Label>统一权限</Label>
               <Select value={grantForm.permission} onValueChange={(v) => setGrantForm({ ...grantForm, permission: v })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -301,13 +396,50 @@ export default function AccessKeysPage() {
                 </SelectContent>
               </Select>
             </div>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label>命名空间（可多选）</Label>
+                <span className="text-xs text-muted-foreground">已选 {grantForm.namespace_ids.length} 个</span>
+              </div>
+              <div className="max-h-72 space-y-2 overflow-y-auto rounded-xl border p-2">
+                {grantLoading ? (
+                  <p className="py-8 text-center text-sm text-muted-foreground">正在加载授权...</p>
+                ) : allNamespaces.length === 0 ? (
+                  <p className="py-8 text-center text-sm text-muted-foreground">暂无可授权的命名空间</p>
+                ) : allNamespaces.map((namespace: NamespaceItem) => {
+                  const selected = grantForm.namespace_ids.includes(namespace.id)
+                  return (
+                    <button
+                      key={namespace.id}
+                      type="button"
+                      onClick={() => toggleGrantNamespace(namespace.id)}
+                      className={`flex w-full items-center gap-3 rounded-lg border px-3 py-3 text-left transition ${
+                        selected ? "border-primary/40 bg-primary/8" : "hover:bg-muted/60"
+                      }`}
+                    >
+                      <span className={`flex h-5 w-5 items-center justify-center rounded border ${
+                        selected ? "border-primary bg-primary text-primary-foreground" : "border-input"
+                      }`}>
+                        {selected && <Check className="h-3.5 w-3.5" />}
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block text-sm font-medium">{namespace.namespace}</span>
+                        <span className="block truncate text-xs text-muted-foreground">{namespace.description || "暂无描述"}</span>
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+            {grantError && (
+              <p className="rounded-lg bg-destructive/8 px-3 py-2 text-sm text-destructive">{grantError}</p>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setGrantOpen(false)}>取消</Button>
-            <Button onClick={() => grantMutate(
-              { keyId: Number(grantKey!.id), data: { namespace_id: parseInt(grantForm.namespace_id), permission: parseInt(grantForm.permission) } },
-              { onSuccess: () => { invalidate(); invalidateKeyNamespaces(Number(grantKey!.id)); setGrantOpen(false) } },
-            )} disabled={!grantForm.namespace_id}>授权</Button>
+            <Button onClick={() => void saveNamespaceGrants()} disabled={grantLoading || grantSaving}>
+              {grantSaving ? "保存中..." : "保存授权"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -333,13 +465,15 @@ export default function AccessKeysPage() {
                     <div key={`${akn.access_key_id}-${akn.namespace_id}`} className="flex items-center justify-between rounded-lg border p-3">
                       <div className="flex items-center gap-2">
                         <Shield className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-sm">命名空间 #{akn.namespace_id}</span>
+                        <span className="text-sm">
+                          {allNamespaces.find((namespace) => namespace.id === akn.namespace_id)?.namespace ?? `命名空间 #${akn.namespace_id}`}
+                        </span>
                         <Badge variant="secondary">{akn.permission === 2 ? "读写" : "只读"}</Badge>
                       </div>
                       <Button variant="ghost" size="sm" className="text-destructive"
                         onClick={() => revokeMutate(
-                          { keyId: Number(detailKey!.id), namespaceId: Number(akn.namespace_id) },
-                          { onSuccess: () => { invalidate(); invalidateKeyNamespaces(Number(detailKey!.id)) } },
+                          { keyId: apiId(detailKey!.id), namespaceId: apiId(akn.namespace_id) },
+                          { onSuccess: () => { invalidate(); invalidateKeyNamespaces(apiId(detailKey!.id)) } },
                         )}>
                         解除
                       </Button>

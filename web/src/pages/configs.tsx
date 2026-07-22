@@ -13,8 +13,10 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
-import { Plus, Pencil, Trash2, History, RotateCcw } from "lucide-react"
+import { Eye, Plus, Pencil, Trash2, History, RotateCcw } from "lucide-react"
 import {
+  getConfig,
+  getConfigHistory,
   useListConfigs,
   useCreateConfig,
   useUpdateConfig,
@@ -24,6 +26,7 @@ import {
   getListConfigsQueryKey,
 } from "@/lib/orval/configs/configs"
 import { useGetNamespace } from "@/lib/orval/namespaces/namespaces"
+import { apiId, unwrapData } from "@/shared/api/response"
 
 const ConfigEditor = lazy(() =>
   import("@/features/configs/config-editor").then((module) => ({
@@ -37,6 +40,14 @@ function EditorFallback() {
       <span className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
       正在加载配置编辑器…
     </div>
+  )
+}
+
+function ConfigContent({ content }: { content?: string }) {
+  return (
+    <pre className="max-h-[520px] overflow-auto whitespace-pre-wrap rounded-2xl border bg-muted/35 p-5 font-mono text-sm leading-6">
+      {content || "（空配置）"}
+    </pre>
   )
 }
 
@@ -77,14 +88,18 @@ const formatColors: Record<number, string> = {
 
 export default function ConfigsPage() {
   const { namespaceId } = useParams<{ namespaceId: string }>()
-  const nsId = Number(namespaceId)
+  const nsId = apiId(namespaceId ?? "0")
   const queryClient = useQueryClient()
 
   const [open, setOpen] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
   const [editConfig, setEditConfig] = useState<ConfigItem | null>(null)
+  const [viewOpen, setViewOpen] = useState(false)
+  const [viewConfig, setViewConfig] = useState<ConfigItem | null>(null)
   const [historyOpen, setHistoryOpen] = useState(false)
   const [historyConfig, setHistoryConfig] = useState<ConfigItem | null>(null)
+  const [historyDetailOpen, setHistoryDetailOpen] = useState(false)
+  const [historyDetail, setHistoryDetail] = useState<ConfigHistoryItem | null>(null)
   const [rollbackOpen, setRollbackOpen] = useState(false)
   const [rollbackTarget, setRollbackTarget] = useState<ConfigHistoryItem | null>(null)
   const [form, setForm] = useState({ config_name: "", format: "1", content: "", description: "" })
@@ -92,10 +107,14 @@ export default function ConfigsPage() {
   const [rollbackReason, setRollbackReason] = useState("")
   const [formValid, setFormValid] = useState(true)
   const [editFormValid, setEditFormValid] = useState(true)
+  const [actionError, setActionError] = useState("")
 
   const { data: nsRes } = useGetNamespace(nsId)
   const { data: configsRes, isLoading } = useListConfigs(nsId)
-  const { data: historyRes } = useListConfigHistory(Number(historyConfig?.id))
+  const { data: historyRes, isLoading: historyLoading } = useListConfigHistory(
+    apiId(historyConfig?.id ?? "0"),
+    { query: { enabled: Boolean(historyConfig) } },
+  )
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: getListConfigsQueryKey(nsId) })
 
@@ -107,6 +126,44 @@ export default function ConfigsPage() {
   const configs = (configsRes?.data as unknown as { data?: ConfigItem[] })?.data ?? []
   const namespaceName = (nsRes?.data as unknown as { data?: NamespaceDetail })?.data?.namespace ?? ""
   const historyList = (historyRes?.data as unknown as { data?: ConfigHistoryItem[] })?.data ?? []
+
+  const loadConfigDetail = async (config: ConfigItem) => {
+    const response = await getConfig(apiId(config.id))
+    return unwrapData<ConfigItem>(response)
+  }
+
+  const handleViewConfig = async (config: ConfigItem) => {
+    setActionError("")
+    try {
+      setViewConfig(await loadConfigDetail(config))
+      setViewOpen(true)
+    } catch {
+      setActionError("配置详情加载失败，请稍后重试")
+    }
+  }
+
+  const handleEditConfig = async (config: ConfigItem) => {
+    setActionError("")
+    try {
+      const detail = await loadConfigDetail(config)
+      setEditConfig(detail)
+      setEditForm({ content: detail.content || "", description: detail.description, change_reason: "" })
+      setEditOpen(true)
+    } catch {
+      setActionError("配置详情加载失败，无法编辑")
+    }
+  }
+
+  const handleViewHistory = async (history: ConfigHistoryItem) => {
+    setActionError("")
+    try {
+      const response = await getConfigHistory(apiId(history.id))
+      setHistoryDetail(unwrapData<ConfigHistoryItem>(response))
+      setHistoryDetailOpen(true)
+    } catch {
+      setActionError("历史版本加载失败，请稍后重试")
+    }
+  }
 
   return (
     <div className="space-y-7">
@@ -177,6 +234,12 @@ export default function ConfigsPage() {
         </Dialog>
       </div>
 
+      {actionError && (
+        <div className="rounded-xl border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+          {actionError}
+        </div>
+      )}
+
       <Card className="overflow-hidden border-border/60 bg-card/80 shadow-sm backdrop-blur">
         <CardContent className="p-0">
           <div className="overflow-x-auto">
@@ -218,14 +281,17 @@ export default function ConfigsPage() {
                     <td className="px-6 py-3 text-sm text-muted-foreground">{cfg.updated_by || cfg.created_by || "-"}</td>
                     <td className="px-6 py-3 text-sm text-muted-foreground">{cfg.updated_at}</td>
                     <td className="px-6 py-3 text-right">
-                      <Button variant="ghost" size="icon" onClick={() => { setEditConfig(cfg); setEditForm({ content: cfg.content || "", description: cfg.description, change_reason: "" }); setEditOpen(true) }}>
+                      <Button variant="ghost" size="icon" aria-label="查看配置" onClick={() => void handleViewConfig(cfg)}>
+                        <Eye className="h-4 w-4" />
+                      </Button>
+                      <Button variant="ghost" size="icon" aria-label="编辑配置" onClick={() => void handleEditConfig(cfg)}>
                         <Pencil className="h-4 w-4" />
                       </Button>
-                      <Button variant="ghost" size="icon" onClick={() => { setHistoryConfig(cfg); setHistoryOpen(true) }}>
+                      <Button variant="ghost" size="icon" aria-label="查看历史" onClick={() => { setHistoryConfig(cfg); setHistoryOpen(true) }}>
                         <History className="h-4 w-4" />
                       </Button>
                       <Button variant="ghost" size="icon" onClick={() => {
-                        if (confirm("确定删除？")) deleteMutate({ configId: Number(cfg.id) }, { onSuccess: () => invalidate() })
+                        if (confirm("确定删除？")) deleteMutate({ configId: apiId(cfg.id) }, { onSuccess: () => invalidate() })
                       }}>
                         <Trash2 className="h-4 w-4 text-destructive" />
                       </Button>
@@ -238,6 +304,18 @@ export default function ConfigsPage() {
           </div>
         </CardContent>
       </Card>
+
+      <Dialog open={viewOpen} onOpenChange={setViewOpen}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>{viewConfig?.config_name}</DialogTitle>
+            <DialogDescription>
+              {formatLabels[viewConfig?.format ?? 0] || "未知格式"} · v{viewConfig?.version}
+            </DialogDescription>
+          </DialogHeader>
+          <ConfigContent content={viewConfig?.content} />
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
         <DialogContent className="max-w-5xl">
@@ -269,7 +347,7 @@ export default function ConfigsPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditOpen(false)}>取消</Button>
             <Button onClick={() => updateMutate(
-              { configId: Number(editConfig!.id), data: editForm },
+              { configId: apiId(editConfig!.id), data: editForm },
               { onSuccess: () => { invalidate(); setEditOpen(false) } },
             )} disabled={!editFormValid}>保存</Button>
           </DialogFooter>
@@ -283,7 +361,9 @@ export default function ConfigsPage() {
             <DialogDescription>{historyConfig?.config_name}</DialogDescription>
           </DialogHeader>
           <div className="space-y-3 max-h-[400px] overflow-y-auto">
-            {historyList.length > 0 ? (
+            {historyLoading ? (
+              <p className="py-8 text-center text-muted-foreground">正在加载历史版本...</p>
+            ) : historyList.length > 0 ? (
               historyList.map((h: ConfigHistoryItem) => (
                 <div key={h.id} className="flex items-start justify-between rounded-lg border p-4">
                   <div className="space-y-1">
@@ -294,18 +374,35 @@ export default function ConfigsPage() {
                     </div>
                     {h.change_reason && <p className="text-sm">{h.change_reason}</p>}
                   </div>
-                  <Button variant="outline" size="sm" onClick={() => {
-                    setRollbackTarget(h)
-                    setRollbackOpen(true)
-                  }}>
-                    <RotateCcw className="h-3 w-3 mr-1" />回滚到此版本
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button variant="ghost" size="sm" onClick={() => void handleViewHistory(h)}>
+                      <Eye className="mr-1 h-3.5 w-3.5" />查看
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => {
+                      setRollbackTarget(h)
+                      setRollbackOpen(true)
+                    }}>
+                      <RotateCcw className="h-3 w-3 mr-1" />回滚到此版本
+                    </Button>
+                  </div>
                 </div>
               ))
             ) : (
               <p className="text-center text-muted-foreground py-8">暂无历史版本</p>
             )}
           </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={historyDetailOpen} onOpenChange={setHistoryDetailOpen}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>历史版本 v{historyDetail?.version}</DialogTitle>
+            <DialogDescription>
+              {historyDetail?.operator || "未知操作人"} · {historyDetail?.created_at}
+            </DialogDescription>
+          </DialogHeader>
+          <ConfigContent content={historyDetail?.content} />
         </DialogContent>
       </Dialog>
 
@@ -322,7 +419,7 @@ export default function ConfigsPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setRollbackOpen(false)}>取消</Button>
             <Button onClick={() => rollbackMutate(
-              { configId: Number(historyConfig!.id), historyId: Number(rollbackTarget!.id), data: { change_reason: rollbackReason || undefined } },
+              { configId: apiId(historyConfig!.id), historyId: apiId(rollbackTarget!.id), data: { change_reason: rollbackReason || undefined } },
               { onSuccess: () => { invalidate(); setRollbackOpen(false); setRollbackReason("") } },
             )}>确认回滚</Button>
           </DialogFooter>

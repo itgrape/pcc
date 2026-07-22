@@ -3,7 +3,6 @@ import {
   Activity,
   ArrowUpRight,
   CircleCheck,
-  CloudCog,
   FileCode2,
   FolderKanban,
   KeyRound,
@@ -67,23 +66,20 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-8">
-      <section className="relative overflow-hidden rounded-3xl border border-border/70 bg-card/85 p-7 shadow-sm backdrop-blur md:p-9">
+      <section className="relative overflow-hidden rounded-3xl border border-border/70 bg-card/85 px-7 py-6 shadow-sm backdrop-blur md:px-8 md:py-7">
         <div className="absolute inset-y-0 left-0 w-1 bg-primary" />
         <div className="absolute -right-20 -top-24 h-72 w-72 rounded-full bg-primary/[0.045]" />
         <div className="relative max-w-3xl">
-          <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl border bg-primary/8 text-primary shadow-sm">
-            <CloudCog className="h-6 w-6" />
-          </div>
           <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-primary">
             Configuration workspace
           </p>
-          <h1 className="text-3xl font-semibold tracking-tight text-foreground md:text-4xl">
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground md:text-3xl">
             让每一次配置变更都清晰、可靠
           </h1>
           <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground md:text-base">
             集中管理多环境配置、访问凭证和版本历史，让团队更安全地交付服务。
           </p>
-          <div className="mt-6 flex flex-wrap gap-3">
+          <div className="mt-5 flex flex-wrap gap-3">
             <Link
               to="/namespaces"
               className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-sm transition hover:-translate-y-0.5 hover:bg-primary/90 hover:shadow-md"
@@ -98,7 +94,7 @@ export default function DashboardPage() {
             </Link>
           </div>
         </div>
-        <div className="absolute bottom-8 right-8 hidden rounded-2xl border bg-background/65 p-4 shadow-sm backdrop-blur lg:block">
+        <div className="absolute bottom-7 right-8 hidden rounded-2xl border bg-background/65 p-3.5 shadow-sm backdrop-blur lg:block">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/10">
               <CircleCheck className="h-5 w-5 text-emerald-500" />

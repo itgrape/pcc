@@ -90,7 +90,35 @@ type accessKeyNamespaceRepository struct {
 }
 
 func (r *accessKeyNamespaceRepository) Create(ctx context.Context, akn *model.AccessKeyNamespace) error {
-	return mapError(r.q.AccessKeyNamespace.WithContext(ctx).Create(akn))
+	a := r.q.AccessKeyNamespace
+	existing, err := a.WithContext(ctx).
+		Unscoped().
+		Where(a.AccessKeyID.Eq(akn.AccessKeyID), a.NamespaceID.Eq(akn.NamespaceID)).
+		First()
+	if err == nil {
+		if !existing.DeletedAt.Valid {
+			return ErrDuplicate
+		}
+		_, err = a.WithContext(ctx).
+			Unscoped().
+			Where(a.ID.Eq(existing.ID)).
+			Updates(map[string]any{
+				"deleted_at": nil,
+				"permission": akn.Permission,
+				"version":    existing.Version + 1,
+			})
+		if err != nil {
+			return mapError(err)
+		}
+		akn.Base = existing.Base
+		akn.DeletedAt.Valid = false
+		akn.Version = existing.Version + 1
+		return nil
+	}
+	if mapped := mapError(err); mapped != ErrNotFound {
+		return mapped
+	}
+	return mapError(a.WithContext(ctx).Create(akn))
 }
 
 func (r *accessKeyNamespaceRepository) GetByID(ctx context.Context, id uint64) (*model.AccessKeyNamespace, error) {

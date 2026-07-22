@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"net/http"
+	"strconv"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/itgrape/pcc/server/internal/domain"
@@ -165,7 +166,11 @@ type GrantNamespaceOutput struct {
 }
 
 func (h *handlers) grantKeyNamespace(ctx context.Context, in *GrantNamespaceInput) (*GrantNamespaceOutput, error) {
-	akn, err := h.deps.AccessKeys.GrantNamespace(ctx, in.KeyID, in.Body.NamespaceID, model.Permission(in.Body.Permission))
+	namespaceID, err := strconv.ParseUint(in.Body.NamespaceID, 10, 64)
+	if err != nil {
+		return nil, toHTTPError(domain.ErrValidation)
+	}
+	akn, err := h.deps.AccessKeys.GrantNamespace(ctx, in.KeyID, namespaceID, model.Permission(in.Body.Permission))
 	if err != nil {
 		return nil, toHTTPError(err)
 	}

@@ -17,6 +17,7 @@ import {
   useUpdateNamespace,
   getListNamespacesQueryKey,
 } from "@/lib/orval/namespaces/namespaces"
+import { apiId } from "@/shared/api/response"
 
 interface Namespace {
   id: string
@@ -169,7 +170,7 @@ export default function NamespacesPage() {
                       </Button>
                       <Button variant="ghost" size="icon" onClick={() => {
                         if (confirm("确定删除？")) deleteMutate(
-                          { namespaceId: Number(ns.id) },
+                          { namespaceId: apiId(ns.id) },
                           { onSuccess: () => invalidate() },
                         )
                       }}>
@@ -212,7 +213,7 @@ export default function NamespacesPage() {
             <Button variant="outline" onClick={() => setEditOpen(false)}>取消</Button>
             <Button onClick={() =>
               editNs && updateMutate(
-                { namespaceId: Number(editNs.id), data: { description: editNs.description } },
+                { namespaceId: apiId(editNs.id), data: { description: editNs.description } },
                 { onSuccess: () => { invalidate(); setEditOpen(false) } },
               )
             }>保存</Button>
