@@ -125,6 +125,11 @@ func (uc *AccessKeyUsecase) ListNamespaces(ctx context.Context, akID uint64) ([]
 	return list, domain.MapError(err)
 }
 
+func (uc *AccessKeyUsecase) ListByNamespace(ctx context.Context, namespaceID uint64) ([]*model.AccessKeyNamespace, error) {
+	list, err := uc.store.AccessKeyNamespace.ListByNamespaceID(ctx, namespaceID)
+	return list, domain.MapError(err)
+}
+
 func (uc *AccessKeyUsecase) GrantNamespace(ctx context.Context, akID, nsID uint64, permission model.Permission) (*model.AccessKeyNamespace, error) {
 	akn := &model.AccessKeyNamespace{
 		AccessKeyID: akID,

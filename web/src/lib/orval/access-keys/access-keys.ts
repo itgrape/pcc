@@ -20,9 +20,6 @@ import type {
   UseQueryResult,
 } from "@tanstack/react-query";
 
-import * as axios from "axios";
-import type { AxiosError, AxiosRequestConfig, AxiosResponse } from "axios";
-
 import type {
   CreateAccessKeyReq,
   ErrorModel,
@@ -32,6 +29,8 @@ import type {
   UpdateAccessKeyReq,
   UpdatePermissionReq,
 } from ".././schemas";
+
+import { request } from "../../../shared/api/http";
 
 // https://stackoverflow.com/questions/49579094/typescript-conditional-types-filter-out-readonly-properties-pick-only-requir/49579497#49579497
 type IfEquals<X, Y, A = X, B = never> =
@@ -61,17 +60,20 @@ type NonReadonly<T> = [T] extends [UnionToIntersection<T>]
     }
   : DistributeReadOnlyOverUnions<T>;
 
+type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
+
 /**
  * @summary 密钥列表
  */
 export const listAccessKeys = (
   params?: ListAccessKeysParams,
-  options?: AxiosRequestConfig,
-): Promise<AxiosResponse<Response>> => {
-  return axios.default.get(`/api/v1/admin/access-keys`, {
-    ...options,
-    params: { ...params, ...options?.params },
-  });
+  options?: SecondParameter<typeof request>,
+  signal?: AbortSignal,
+) => {
+  return request<Response>(
+    { url: `/api/v1/admin/access-keys`, method: "GET", params, signal },
+    options,
+  );
 };
 
 export const getListAccessKeysQueryKey = (params?: ListAccessKeysParams) => {
@@ -80,23 +82,23 @@ export const getListAccessKeysQueryKey = (params?: ListAccessKeysParams) => {
 
 export const getListAccessKeysQueryOptions = <
   TData = Awaited<ReturnType<typeof listAccessKeys>>,
-  TError = AxiosError<ErrorModel>,
+  TError = ErrorModel,
 >(
   params?: ListAccessKeysParams,
   options?: {
     query?: Partial<
       UseQueryOptions<Awaited<ReturnType<typeof listAccessKeys>>, TError, TData>
     >;
-    axios?: AxiosRequestConfig;
+    request?: SecondParameter<typeof request>;
   },
 ) => {
-  const { query: queryOptions, axios: axiosOptions } = options ?? {};
+  const { query: queryOptions, request: requestOptions } = options ?? {};
 
   const queryKey = queryOptions?.queryKey ?? getListAccessKeysQueryKey(params);
 
   const queryFn: QueryFunction<Awaited<ReturnType<typeof listAccessKeys>>> = ({
     signal,
-  }) => listAccessKeys(params, { signal, ...axiosOptions });
+  }) => listAccessKeys(params, requestOptions, signal);
 
   return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
     Awaited<ReturnType<typeof listAccessKeys>>,
@@ -108,11 +110,11 @@ export const getListAccessKeysQueryOptions = <
 export type ListAccessKeysQueryResult = NonNullable<
   Awaited<ReturnType<typeof listAccessKeys>>
 >;
-export type ListAccessKeysQueryError = AxiosError<ErrorModel>;
+export type ListAccessKeysQueryError = ErrorModel;
 
 export function useListAccessKeys<
   TData = Awaited<ReturnType<typeof listAccessKeys>>,
-  TError = AxiosError<ErrorModel>,
+  TError = ErrorModel,
 >(
   params: undefined | ListAccessKeysParams,
   options: {
@@ -127,7 +129,7 @@ export function useListAccessKeys<
         >,
         "initialData"
       >;
-    axios?: AxiosRequestConfig;
+    request?: SecondParameter<typeof request>;
   },
   queryClient?: QueryClient,
 ): DefinedUseQueryResult<TData, TError> & {
@@ -135,7 +137,7 @@ export function useListAccessKeys<
 };
 export function useListAccessKeys<
   TData = Awaited<ReturnType<typeof listAccessKeys>>,
-  TError = AxiosError<ErrorModel>,
+  TError = ErrorModel,
 >(
   params?: ListAccessKeysParams,
   options?: {
@@ -150,7 +152,7 @@ export function useListAccessKeys<
         >,
         "initialData"
       >;
-    axios?: AxiosRequestConfig;
+    request?: SecondParameter<typeof request>;
   },
   queryClient?: QueryClient,
 ): UseQueryResult<TData, TError> & {
@@ -158,14 +160,14 @@ export function useListAccessKeys<
 };
 export function useListAccessKeys<
   TData = Awaited<ReturnType<typeof listAccessKeys>>,
-  TError = AxiosError<ErrorModel>,
+  TError = ErrorModel,
 >(
   params?: ListAccessKeysParams,
   options?: {
     query?: Partial<
       UseQueryOptions<Awaited<ReturnType<typeof listAccessKeys>>, TError, TData>
     >;
-    axios?: AxiosRequestConfig;
+    request?: SecondParameter<typeof request>;
   },
   queryClient?: QueryClient,
 ): UseQueryResult<TData, TError> & {
@@ -177,14 +179,14 @@ export function useListAccessKeys<
 
 export function useListAccessKeys<
   TData = Awaited<ReturnType<typeof listAccessKeys>>,
-  TError = AxiosError<ErrorModel>,
+  TError = ErrorModel,
 >(
   params?: ListAccessKeysParams,
   options?: {
     query?: Partial<
       UseQueryOptions<Awaited<ReturnType<typeof listAccessKeys>>, TError, TData>
     >;
-    axios?: AxiosRequestConfig;
+    request?: SecondParameter<typeof request>;
   },
   queryClient?: QueryClient,
 ): UseQueryResult<TData, TError> & {
@@ -207,17 +209,23 @@ export function useListAccessKeys<
  */
 export const createAccessKey = (
   createAccessKeyReq: NonReadonly<CreateAccessKeyReq>,
-  options?: AxiosRequestConfig,
-): Promise<AxiosResponse<Response>> => {
-  return axios.default.post(
-    `/api/v1/admin/access-keys`,
-    createAccessKeyReq,
+  options?: SecondParameter<typeof request>,
+  signal?: AbortSignal,
+) => {
+  return request<Response>(
+    {
+      url: `/api/v1/admin/access-keys`,
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      data: createAccessKeyReq,
+      signal,
+    },
     options,
   );
 };
 
 export const getCreateAccessKeyMutationOptions = <
-  TError = AxiosError<ErrorModel>,
+  TError = ErrorModel,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
@@ -226,7 +234,7 @@ export const getCreateAccessKeyMutationOptions = <
     { data: NonReadonly<CreateAccessKeyReq> },
     TContext
   >;
-  axios?: AxiosRequestConfig;
+  request?: SecondParameter<typeof request>;
 }): UseMutationOptions<
   Awaited<ReturnType<typeof createAccessKey>>,
   TError,
@@ -234,13 +242,13 @@ export const getCreateAccessKeyMutationOptions = <
   TContext
 > => {
   const mutationKey = ["createAccessKey"];
-  const { mutation: mutationOptions, axios: axiosOptions } = options
+  const { mutation: mutationOptions, request: requestOptions } = options
     ? options.mutation &&
       "mutationKey" in options.mutation &&
       options.mutation.mutationKey
       ? options
       : { ...options, mutation: { ...options.mutation, mutationKey } }
-    : { mutation: { mutationKey }, axios: undefined };
+    : { mutation: { mutationKey }, request: undefined };
 
   const mutationFn: MutationFunction<
     Awaited<ReturnType<typeof createAccessKey>>,
@@ -248,7 +256,7 @@ export const getCreateAccessKeyMutationOptions = <
   > = (props) => {
     const { data } = props ?? {};
 
-    return createAccessKey(data, axiosOptions);
+    return createAccessKey(data, requestOptions);
   };
 
   return { mutationFn, ...mutationOptions };
@@ -258,15 +266,12 @@ export type CreateAccessKeyMutationResult = NonNullable<
   Awaited<ReturnType<typeof createAccessKey>>
 >;
 export type CreateAccessKeyMutationBody = NonReadonly<CreateAccessKeyReq>;
-export type CreateAccessKeyMutationError = AxiosError<ErrorModel>;
+export type CreateAccessKeyMutationError = ErrorModel;
 
 /**
  * @summary 创建密钥
  */
-export const useCreateAccessKey = <
-  TError = AxiosError<ErrorModel>,
-  TContext = unknown,
->(
+export const useCreateAccessKey = <TError = ErrorModel, TContext = unknown>(
   options?: {
     mutation?: UseMutationOptions<
       Awaited<ReturnType<typeof createAccessKey>>,
@@ -274,7 +279,7 @@ export const useCreateAccessKey = <
       { data: NonReadonly<CreateAccessKeyReq> },
       TContext
     >;
-    axios?: AxiosRequestConfig;
+    request?: SecondParameter<typeof request>;
   },
   queryClient?: QueryClient,
 ): UseMutationResult<
@@ -292,13 +297,16 @@ export const useCreateAccessKey = <
  */
 export const deleteAccessKey = (
   keyId: number,
-  options?: AxiosRequestConfig,
-): Promise<AxiosResponse<void>> => {
-  return axios.default.delete(`/api/v1/admin/access-keys/${keyId}`, options);
+  options?: SecondParameter<typeof request>,
+) => {
+  return request<void>(
+    { url: `/api/v1/admin/access-keys/${keyId}`, method: "DELETE" },
+    options,
+  );
 };
 
 export const getDeleteAccessKeyMutationOptions = <
-  TError = AxiosError<ErrorModel>,
+  TError = ErrorModel,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
@@ -307,7 +315,7 @@ export const getDeleteAccessKeyMutationOptions = <
     { keyId: number },
     TContext
   >;
-  axios?: AxiosRequestConfig;
+  request?: SecondParameter<typeof request>;
 }): UseMutationOptions<
   Awaited<ReturnType<typeof deleteAccessKey>>,
   TError,
@@ -315,13 +323,13 @@ export const getDeleteAccessKeyMutationOptions = <
   TContext
 > => {
   const mutationKey = ["deleteAccessKey"];
-  const { mutation: mutationOptions, axios: axiosOptions } = options
+  const { mutation: mutationOptions, request: requestOptions } = options
     ? options.mutation &&
       "mutationKey" in options.mutation &&
       options.mutation.mutationKey
       ? options
       : { ...options, mutation: { ...options.mutation, mutationKey } }
-    : { mutation: { mutationKey }, axios: undefined };
+    : { mutation: { mutationKey }, request: undefined };
 
   const mutationFn: MutationFunction<
     Awaited<ReturnType<typeof deleteAccessKey>>,
@@ -329,7 +337,7 @@ export const getDeleteAccessKeyMutationOptions = <
   > = (props) => {
     const { keyId } = props ?? {};
 
-    return deleteAccessKey(keyId, axiosOptions);
+    return deleteAccessKey(keyId, requestOptions);
   };
 
   return { mutationFn, ...mutationOptions };
@@ -339,15 +347,12 @@ export type DeleteAccessKeyMutationResult = NonNullable<
   Awaited<ReturnType<typeof deleteAccessKey>>
 >;
 
-export type DeleteAccessKeyMutationError = AxiosError<ErrorModel>;
+export type DeleteAccessKeyMutationError = ErrorModel;
 
 /**
  * @summary 删除密钥
  */
-export const useDeleteAccessKey = <
-  TError = AxiosError<ErrorModel>,
-  TContext = unknown,
->(
+export const useDeleteAccessKey = <TError = ErrorModel, TContext = unknown>(
   options?: {
     mutation?: UseMutationOptions<
       Awaited<ReturnType<typeof deleteAccessKey>>,
@@ -355,7 +360,7 @@ export const useDeleteAccessKey = <
       { keyId: number },
       TContext
     >;
-    axios?: AxiosRequestConfig;
+    request?: SecondParameter<typeof request>;
   },
   queryClient?: QueryClient,
 ): UseMutationResult<
@@ -373,9 +378,13 @@ export const useDeleteAccessKey = <
  */
 export const getAccessKey = (
   keyId: number,
-  options?: AxiosRequestConfig,
-): Promise<AxiosResponse<Response>> => {
-  return axios.default.get(`/api/v1/admin/access-keys/${keyId}`, options);
+  options?: SecondParameter<typeof request>,
+  signal?: AbortSignal,
+) => {
+  return request<Response>(
+    { url: `/api/v1/admin/access-keys/${keyId}`, method: "GET", signal },
+    options,
+  );
 };
 
 export const getGetAccessKeyQueryKey = (keyId?: number) => {
@@ -384,23 +393,23 @@ export const getGetAccessKeyQueryKey = (keyId?: number) => {
 
 export const getGetAccessKeyQueryOptions = <
   TData = Awaited<ReturnType<typeof getAccessKey>>,
-  TError = AxiosError<ErrorModel>,
+  TError = ErrorModel,
 >(
   keyId: number,
   options?: {
     query?: Partial<
       UseQueryOptions<Awaited<ReturnType<typeof getAccessKey>>, TError, TData>
     >;
-    axios?: AxiosRequestConfig;
+    request?: SecondParameter<typeof request>;
   },
 ) => {
-  const { query: queryOptions, axios: axiosOptions } = options ?? {};
+  const { query: queryOptions, request: requestOptions } = options ?? {};
 
   const queryKey = queryOptions?.queryKey ?? getGetAccessKeyQueryKey(keyId);
 
   const queryFn: QueryFunction<Awaited<ReturnType<typeof getAccessKey>>> = ({
     signal,
-  }) => getAccessKey(keyId, { signal, ...axiosOptions });
+  }) => getAccessKey(keyId, requestOptions, signal);
 
   return {
     queryKey,
@@ -417,11 +426,11 @@ export const getGetAccessKeyQueryOptions = <
 export type GetAccessKeyQueryResult = NonNullable<
   Awaited<ReturnType<typeof getAccessKey>>
 >;
-export type GetAccessKeyQueryError = AxiosError<ErrorModel>;
+export type GetAccessKeyQueryError = ErrorModel;
 
 export function useGetAccessKey<
   TData = Awaited<ReturnType<typeof getAccessKey>>,
-  TError = AxiosError<ErrorModel>,
+  TError = ErrorModel,
 >(
   keyId: number,
   options: {
@@ -436,7 +445,7 @@ export function useGetAccessKey<
         >,
         "initialData"
       >;
-    axios?: AxiosRequestConfig;
+    request?: SecondParameter<typeof request>;
   },
   queryClient?: QueryClient,
 ): DefinedUseQueryResult<TData, TError> & {
@@ -444,7 +453,7 @@ export function useGetAccessKey<
 };
 export function useGetAccessKey<
   TData = Awaited<ReturnType<typeof getAccessKey>>,
-  TError = AxiosError<ErrorModel>,
+  TError = ErrorModel,
 >(
   keyId: number,
   options?: {
@@ -459,7 +468,7 @@ export function useGetAccessKey<
         >,
         "initialData"
       >;
-    axios?: AxiosRequestConfig;
+    request?: SecondParameter<typeof request>;
   },
   queryClient?: QueryClient,
 ): UseQueryResult<TData, TError> & {
@@ -467,14 +476,14 @@ export function useGetAccessKey<
 };
 export function useGetAccessKey<
   TData = Awaited<ReturnType<typeof getAccessKey>>,
-  TError = AxiosError<ErrorModel>,
+  TError = ErrorModel,
 >(
   keyId: number,
   options?: {
     query?: Partial<
       UseQueryOptions<Awaited<ReturnType<typeof getAccessKey>>, TError, TData>
     >;
-    axios?: AxiosRequestConfig;
+    request?: SecondParameter<typeof request>;
   },
   queryClient?: QueryClient,
 ): UseQueryResult<TData, TError> & {
@@ -486,14 +495,14 @@ export function useGetAccessKey<
 
 export function useGetAccessKey<
   TData = Awaited<ReturnType<typeof getAccessKey>>,
-  TError = AxiosError<ErrorModel>,
+  TError = ErrorModel,
 >(
   keyId: number,
   options?: {
     query?: Partial<
       UseQueryOptions<Awaited<ReturnType<typeof getAccessKey>>, TError, TData>
     >;
-    axios?: AxiosRequestConfig;
+    request?: SecondParameter<typeof request>;
   },
   queryClient?: QueryClient,
 ): UseQueryResult<TData, TError> & {
@@ -517,17 +526,21 @@ export function useGetAccessKey<
 export const updateAccessKey = (
   keyId: number,
   updateAccessKeyReq: NonReadonly<UpdateAccessKeyReq>,
-  options?: AxiosRequestConfig,
-): Promise<AxiosResponse<Response>> => {
-  return axios.default.put(
-    `/api/v1/admin/access-keys/${keyId}`,
-    updateAccessKeyReq,
+  options?: SecondParameter<typeof request>,
+) => {
+  return request<Response>(
+    {
+      url: `/api/v1/admin/access-keys/${keyId}`,
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      data: updateAccessKeyReq,
+    },
     options,
   );
 };
 
 export const getUpdateAccessKeyMutationOptions = <
-  TError = AxiosError<ErrorModel>,
+  TError = ErrorModel,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
@@ -536,7 +549,7 @@ export const getUpdateAccessKeyMutationOptions = <
     { keyId: number; data: NonReadonly<UpdateAccessKeyReq> },
     TContext
   >;
-  axios?: AxiosRequestConfig;
+  request?: SecondParameter<typeof request>;
 }): UseMutationOptions<
   Awaited<ReturnType<typeof updateAccessKey>>,
   TError,
@@ -544,13 +557,13 @@ export const getUpdateAccessKeyMutationOptions = <
   TContext
 > => {
   const mutationKey = ["updateAccessKey"];
-  const { mutation: mutationOptions, axios: axiosOptions } = options
+  const { mutation: mutationOptions, request: requestOptions } = options
     ? options.mutation &&
       "mutationKey" in options.mutation &&
       options.mutation.mutationKey
       ? options
       : { ...options, mutation: { ...options.mutation, mutationKey } }
-    : { mutation: { mutationKey }, axios: undefined };
+    : { mutation: { mutationKey }, request: undefined };
 
   const mutationFn: MutationFunction<
     Awaited<ReturnType<typeof updateAccessKey>>,
@@ -558,7 +571,7 @@ export const getUpdateAccessKeyMutationOptions = <
   > = (props) => {
     const { keyId, data } = props ?? {};
 
-    return updateAccessKey(keyId, data, axiosOptions);
+    return updateAccessKey(keyId, data, requestOptions);
   };
 
   return { mutationFn, ...mutationOptions };
@@ -568,15 +581,12 @@ export type UpdateAccessKeyMutationResult = NonNullable<
   Awaited<ReturnType<typeof updateAccessKey>>
 >;
 export type UpdateAccessKeyMutationBody = NonReadonly<UpdateAccessKeyReq>;
-export type UpdateAccessKeyMutationError = AxiosError<ErrorModel>;
+export type UpdateAccessKeyMutationError = ErrorModel;
 
 /**
  * @summary 更新密钥
  */
-export const useUpdateAccessKey = <
-  TError = AxiosError<ErrorModel>,
-  TContext = unknown,
->(
+export const useUpdateAccessKey = <TError = ErrorModel, TContext = unknown>(
   options?: {
     mutation?: UseMutationOptions<
       Awaited<ReturnType<typeof updateAccessKey>>,
@@ -584,7 +594,7 @@ export const useUpdateAccessKey = <
       { keyId: number; data: NonReadonly<UpdateAccessKeyReq> },
       TContext
     >;
-    axios?: AxiosRequestConfig;
+    request?: SecondParameter<typeof request>;
   },
   queryClient?: QueryClient,
 ): UseMutationResult<
@@ -602,10 +612,15 @@ export const useUpdateAccessKey = <
  */
 export const listKeyNamespaces = (
   keyId: number,
-  options?: AxiosRequestConfig,
-): Promise<AxiosResponse<Response>> => {
-  return axios.default.get(
-    `/api/v1/admin/access-keys/${keyId}/namespaces`,
+  options?: SecondParameter<typeof request>,
+  signal?: AbortSignal,
+) => {
+  return request<Response>(
+    {
+      url: `/api/v1/admin/access-keys/${keyId}/namespaces`,
+      method: "GET",
+      signal,
+    },
     options,
   );
 };
@@ -616,7 +631,7 @@ export const getListKeyNamespacesQueryKey = (keyId?: number) => {
 
 export const getListKeyNamespacesQueryOptions = <
   TData = Awaited<ReturnType<typeof listKeyNamespaces>>,
-  TError = AxiosError<ErrorModel>,
+  TError = ErrorModel,
 >(
   keyId: number,
   options?: {
@@ -627,17 +642,17 @@ export const getListKeyNamespacesQueryOptions = <
         TData
       >
     >;
-    axios?: AxiosRequestConfig;
+    request?: SecondParameter<typeof request>;
   },
 ) => {
-  const { query: queryOptions, axios: axiosOptions } = options ?? {};
+  const { query: queryOptions, request: requestOptions } = options ?? {};
 
   const queryKey =
     queryOptions?.queryKey ?? getListKeyNamespacesQueryKey(keyId);
 
   const queryFn: QueryFunction<
     Awaited<ReturnType<typeof listKeyNamespaces>>
-  > = ({ signal }) => listKeyNamespaces(keyId, { signal, ...axiosOptions });
+  > = ({ signal }) => listKeyNamespaces(keyId, requestOptions, signal);
 
   return {
     queryKey,
@@ -654,11 +669,11 @@ export const getListKeyNamespacesQueryOptions = <
 export type ListKeyNamespacesQueryResult = NonNullable<
   Awaited<ReturnType<typeof listKeyNamespaces>>
 >;
-export type ListKeyNamespacesQueryError = AxiosError<ErrorModel>;
+export type ListKeyNamespacesQueryError = ErrorModel;
 
 export function useListKeyNamespaces<
   TData = Awaited<ReturnType<typeof listKeyNamespaces>>,
-  TError = AxiosError<ErrorModel>,
+  TError = ErrorModel,
 >(
   keyId: number,
   options: {
@@ -677,7 +692,7 @@ export function useListKeyNamespaces<
         >,
         "initialData"
       >;
-    axios?: AxiosRequestConfig;
+    request?: SecondParameter<typeof request>;
   },
   queryClient?: QueryClient,
 ): DefinedUseQueryResult<TData, TError> & {
@@ -685,7 +700,7 @@ export function useListKeyNamespaces<
 };
 export function useListKeyNamespaces<
   TData = Awaited<ReturnType<typeof listKeyNamespaces>>,
-  TError = AxiosError<ErrorModel>,
+  TError = ErrorModel,
 >(
   keyId: number,
   options?: {
@@ -704,7 +719,7 @@ export function useListKeyNamespaces<
         >,
         "initialData"
       >;
-    axios?: AxiosRequestConfig;
+    request?: SecondParameter<typeof request>;
   },
   queryClient?: QueryClient,
 ): UseQueryResult<TData, TError> & {
@@ -712,7 +727,7 @@ export function useListKeyNamespaces<
 };
 export function useListKeyNamespaces<
   TData = Awaited<ReturnType<typeof listKeyNamespaces>>,
-  TError = AxiosError<ErrorModel>,
+  TError = ErrorModel,
 >(
   keyId: number,
   options?: {
@@ -723,7 +738,7 @@ export function useListKeyNamespaces<
         TData
       >
     >;
-    axios?: AxiosRequestConfig;
+    request?: SecondParameter<typeof request>;
   },
   queryClient?: QueryClient,
 ): UseQueryResult<TData, TError> & {
@@ -735,7 +750,7 @@ export function useListKeyNamespaces<
 
 export function useListKeyNamespaces<
   TData = Awaited<ReturnType<typeof listKeyNamespaces>>,
-  TError = AxiosError<ErrorModel>,
+  TError = ErrorModel,
 >(
   keyId: number,
   options?: {
@@ -746,7 +761,7 @@ export function useListKeyNamespaces<
         TData
       >
     >;
-    axios?: AxiosRequestConfig;
+    request?: SecondParameter<typeof request>;
   },
   queryClient?: QueryClient,
 ): UseQueryResult<TData, TError> & {
@@ -770,17 +785,23 @@ export function useListKeyNamespaces<
 export const grantKeyNamespace = (
   keyId: number,
   grantNamespaceReq: NonReadonly<GrantNamespaceReq>,
-  options?: AxiosRequestConfig,
-): Promise<AxiosResponse<Response>> => {
-  return axios.default.post(
-    `/api/v1/admin/access-keys/${keyId}/namespaces`,
-    grantNamespaceReq,
+  options?: SecondParameter<typeof request>,
+  signal?: AbortSignal,
+) => {
+  return request<Response>(
+    {
+      url: `/api/v1/admin/access-keys/${keyId}/namespaces`,
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      data: grantNamespaceReq,
+      signal,
+    },
     options,
   );
 };
 
 export const getGrantKeyNamespaceMutationOptions = <
-  TError = AxiosError<ErrorModel>,
+  TError = ErrorModel,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
@@ -789,7 +810,7 @@ export const getGrantKeyNamespaceMutationOptions = <
     { keyId: number; data: NonReadonly<GrantNamespaceReq> },
     TContext
   >;
-  axios?: AxiosRequestConfig;
+  request?: SecondParameter<typeof request>;
 }): UseMutationOptions<
   Awaited<ReturnType<typeof grantKeyNamespace>>,
   TError,
@@ -797,13 +818,13 @@ export const getGrantKeyNamespaceMutationOptions = <
   TContext
 > => {
   const mutationKey = ["grantKeyNamespace"];
-  const { mutation: mutationOptions, axios: axiosOptions } = options
+  const { mutation: mutationOptions, request: requestOptions } = options
     ? options.mutation &&
       "mutationKey" in options.mutation &&
       options.mutation.mutationKey
       ? options
       : { ...options, mutation: { ...options.mutation, mutationKey } }
-    : { mutation: { mutationKey }, axios: undefined };
+    : { mutation: { mutationKey }, request: undefined };
 
   const mutationFn: MutationFunction<
     Awaited<ReturnType<typeof grantKeyNamespace>>,
@@ -811,7 +832,7 @@ export const getGrantKeyNamespaceMutationOptions = <
   > = (props) => {
     const { keyId, data } = props ?? {};
 
-    return grantKeyNamespace(keyId, data, axiosOptions);
+    return grantKeyNamespace(keyId, data, requestOptions);
   };
 
   return { mutationFn, ...mutationOptions };
@@ -821,15 +842,12 @@ export type GrantKeyNamespaceMutationResult = NonNullable<
   Awaited<ReturnType<typeof grantKeyNamespace>>
 >;
 export type GrantKeyNamespaceMutationBody = NonReadonly<GrantNamespaceReq>;
-export type GrantKeyNamespaceMutationError = AxiosError<ErrorModel>;
+export type GrantKeyNamespaceMutationError = ErrorModel;
 
 /**
  * @summary 新增授权
  */
-export const useGrantKeyNamespace = <
-  TError = AxiosError<ErrorModel>,
-  TContext = unknown,
->(
+export const useGrantKeyNamespace = <TError = ErrorModel, TContext = unknown>(
   options?: {
     mutation?: UseMutationOptions<
       Awaited<ReturnType<typeof grantKeyNamespace>>,
@@ -837,7 +855,7 @@ export const useGrantKeyNamespace = <
       { keyId: number; data: NonReadonly<GrantNamespaceReq> },
       TContext
     >;
-    axios?: AxiosRequestConfig;
+    request?: SecondParameter<typeof request>;
   },
   queryClient?: QueryClient,
 ): UseMutationResult<
@@ -856,16 +874,19 @@ export const useGrantKeyNamespace = <
 export const revokeKeyNamespace = (
   keyId: number,
   namespaceId: number,
-  options?: AxiosRequestConfig,
-): Promise<AxiosResponse<void>> => {
-  return axios.default.delete(
-    `/api/v1/admin/access-keys/${keyId}/namespaces/${namespaceId}`,
+  options?: SecondParameter<typeof request>,
+) => {
+  return request<void>(
+    {
+      url: `/api/v1/admin/access-keys/${keyId}/namespaces/${namespaceId}`,
+      method: "DELETE",
+    },
     options,
   );
 };
 
 export const getRevokeKeyNamespaceMutationOptions = <
-  TError = AxiosError<ErrorModel>,
+  TError = ErrorModel,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
@@ -874,7 +895,7 @@ export const getRevokeKeyNamespaceMutationOptions = <
     { keyId: number; namespaceId: number },
     TContext
   >;
-  axios?: AxiosRequestConfig;
+  request?: SecondParameter<typeof request>;
 }): UseMutationOptions<
   Awaited<ReturnType<typeof revokeKeyNamespace>>,
   TError,
@@ -882,13 +903,13 @@ export const getRevokeKeyNamespaceMutationOptions = <
   TContext
 > => {
   const mutationKey = ["revokeKeyNamespace"];
-  const { mutation: mutationOptions, axios: axiosOptions } = options
+  const { mutation: mutationOptions, request: requestOptions } = options
     ? options.mutation &&
       "mutationKey" in options.mutation &&
       options.mutation.mutationKey
       ? options
       : { ...options, mutation: { ...options.mutation, mutationKey } }
-    : { mutation: { mutationKey }, axios: undefined };
+    : { mutation: { mutationKey }, request: undefined };
 
   const mutationFn: MutationFunction<
     Awaited<ReturnType<typeof revokeKeyNamespace>>,
@@ -896,7 +917,7 @@ export const getRevokeKeyNamespaceMutationOptions = <
   > = (props) => {
     const { keyId, namespaceId } = props ?? {};
 
-    return revokeKeyNamespace(keyId, namespaceId, axiosOptions);
+    return revokeKeyNamespace(keyId, namespaceId, requestOptions);
   };
 
   return { mutationFn, ...mutationOptions };
@@ -906,15 +927,12 @@ export type RevokeKeyNamespaceMutationResult = NonNullable<
   Awaited<ReturnType<typeof revokeKeyNamespace>>
 >;
 
-export type RevokeKeyNamespaceMutationError = AxiosError<ErrorModel>;
+export type RevokeKeyNamespaceMutationError = ErrorModel;
 
 /**
  * @summary 解除授权
  */
-export const useRevokeKeyNamespace = <
-  TError = AxiosError<ErrorModel>,
-  TContext = unknown,
->(
+export const useRevokeKeyNamespace = <TError = ErrorModel, TContext = unknown>(
   options?: {
     mutation?: UseMutationOptions<
       Awaited<ReturnType<typeof revokeKeyNamespace>>,
@@ -922,7 +940,7 @@ export const useRevokeKeyNamespace = <
       { keyId: number; namespaceId: number },
       TContext
     >;
-    axios?: AxiosRequestConfig;
+    request?: SecondParameter<typeof request>;
   },
   queryClient?: QueryClient,
 ): UseMutationResult<
@@ -942,17 +960,21 @@ export const updateKeyNamespacePermission = (
   keyId: number,
   namespaceId: number,
   updatePermissionReq: NonReadonly<UpdatePermissionReq>,
-  options?: AxiosRequestConfig,
-): Promise<AxiosResponse<Response>> => {
-  return axios.default.put(
-    `/api/v1/admin/access-keys/${keyId}/namespaces/${namespaceId}`,
-    updatePermissionReq,
+  options?: SecondParameter<typeof request>,
+) => {
+  return request<Response>(
+    {
+      url: `/api/v1/admin/access-keys/${keyId}/namespaces/${namespaceId}`,
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      data: updatePermissionReq,
+    },
     options,
   );
 };
 
 export const getUpdateKeyNamespacePermissionMutationOptions = <
-  TError = AxiosError<ErrorModel>,
+  TError = ErrorModel,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
@@ -965,7 +987,7 @@ export const getUpdateKeyNamespacePermissionMutationOptions = <
     },
     TContext
   >;
-  axios?: AxiosRequestConfig;
+  request?: SecondParameter<typeof request>;
 }): UseMutationOptions<
   Awaited<ReturnType<typeof updateKeyNamespacePermission>>,
   TError,
@@ -977,13 +999,13 @@ export const getUpdateKeyNamespacePermissionMutationOptions = <
   TContext
 > => {
   const mutationKey = ["updateKeyNamespacePermission"];
-  const { mutation: mutationOptions, axios: axiosOptions } = options
+  const { mutation: mutationOptions, request: requestOptions } = options
     ? options.mutation &&
       "mutationKey" in options.mutation &&
       options.mutation.mutationKey
       ? options
       : { ...options, mutation: { ...options.mutation, mutationKey } }
-    : { mutation: { mutationKey }, axios: undefined };
+    : { mutation: { mutationKey }, request: undefined };
 
   const mutationFn: MutationFunction<
     Awaited<ReturnType<typeof updateKeyNamespacePermission>>,
@@ -995,7 +1017,12 @@ export const getUpdateKeyNamespacePermissionMutationOptions = <
   > = (props) => {
     const { keyId, namespaceId, data } = props ?? {};
 
-    return updateKeyNamespacePermission(keyId, namespaceId, data, axiosOptions);
+    return updateKeyNamespacePermission(
+      keyId,
+      namespaceId,
+      data,
+      requestOptions,
+    );
   };
 
   return { mutationFn, ...mutationOptions };
@@ -1006,13 +1033,13 @@ export type UpdateKeyNamespacePermissionMutationResult = NonNullable<
 >;
 export type UpdateKeyNamespacePermissionMutationBody =
   NonReadonly<UpdatePermissionReq>;
-export type UpdateKeyNamespacePermissionMutationError = AxiosError<ErrorModel>;
+export type UpdateKeyNamespacePermissionMutationError = ErrorModel;
 
 /**
  * @summary 更新授权
  */
 export const useUpdateKeyNamespacePermission = <
-  TError = AxiosError<ErrorModel>,
+  TError = ErrorModel,
   TContext = unknown,
 >(
   options?: {
@@ -1026,7 +1053,7 @@ export const useUpdateKeyNamespacePermission = <
       },
       TContext
     >;
-    axios?: AxiosRequestConfig;
+    request?: SecondParameter<typeof request>;
   },
   queryClient?: QueryClient,
 ): UseMutationResult<

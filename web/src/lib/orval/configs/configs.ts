@@ -20,9 +20,6 @@ import type {
   UseQueryResult,
 } from "@tanstack/react-query";
 
-import * as axios from "axios";
-import type { AxiosError, AxiosRequestConfig, AxiosResponse } from "axios";
-
 import type {
   CreateConfigReq,
   ErrorModel,
@@ -30,6 +27,8 @@ import type {
   RollbackReq,
   UpdateConfigReq,
 } from ".././schemas";
+
+import { request } from "../../../shared/api/http";
 
 // https://stackoverflow.com/questions/49579094/typescript-conditional-types-filter-out-readonly-properties-pick-only-requir/49579497#49579497
 type IfEquals<X, Y, A = X, B = never> =
@@ -59,15 +58,18 @@ type NonReadonly<T> = [T] extends [UnionToIntersection<T>]
     }
   : DistributeReadOnlyOverUnions<T>;
 
+type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
+
 /**
  * @summary 历史版本详情
  */
 export const getConfigHistory = (
   historyId: number,
-  options?: AxiosRequestConfig,
-): Promise<AxiosResponse<Response>> => {
-  return axios.default.get(
-    `/api/v1/admin/config/history/${historyId}`,
+  options?: SecondParameter<typeof request>,
+  signal?: AbortSignal,
+) => {
+  return request<Response>(
+    { url: `/api/v1/admin/config/history/${historyId}`, method: "GET", signal },
     options,
   );
 };
@@ -78,7 +80,7 @@ export const getGetConfigHistoryQueryKey = (historyId?: number) => {
 
 export const getGetConfigHistoryQueryOptions = <
   TData = Awaited<ReturnType<typeof getConfigHistory>>,
-  TError = AxiosError<ErrorModel>,
+  TError = ErrorModel,
 >(
   historyId: number,
   options?: {
@@ -89,17 +91,17 @@ export const getGetConfigHistoryQueryOptions = <
         TData
       >
     >;
-    axios?: AxiosRequestConfig;
+    request?: SecondParameter<typeof request>;
   },
 ) => {
-  const { query: queryOptions, axios: axiosOptions } = options ?? {};
+  const { query: queryOptions, request: requestOptions } = options ?? {};
 
   const queryKey =
     queryOptions?.queryKey ?? getGetConfigHistoryQueryKey(historyId);
 
   const queryFn: QueryFunction<
     Awaited<ReturnType<typeof getConfigHistory>>
-  > = ({ signal }) => getConfigHistory(historyId, { signal, ...axiosOptions });
+  > = ({ signal }) => getConfigHistory(historyId, requestOptions, signal);
 
   return {
     queryKey,
@@ -116,11 +118,11 @@ export const getGetConfigHistoryQueryOptions = <
 export type GetConfigHistoryQueryResult = NonNullable<
   Awaited<ReturnType<typeof getConfigHistory>>
 >;
-export type GetConfigHistoryQueryError = AxiosError<ErrorModel>;
+export type GetConfigHistoryQueryError = ErrorModel;
 
 export function useGetConfigHistory<
   TData = Awaited<ReturnType<typeof getConfigHistory>>,
-  TError = AxiosError<ErrorModel>,
+  TError = ErrorModel,
 >(
   historyId: number,
   options: {
@@ -139,7 +141,7 @@ export function useGetConfigHistory<
         >,
         "initialData"
       >;
-    axios?: AxiosRequestConfig;
+    request?: SecondParameter<typeof request>;
   },
   queryClient?: QueryClient,
 ): DefinedUseQueryResult<TData, TError> & {
@@ -147,7 +149,7 @@ export function useGetConfigHistory<
 };
 export function useGetConfigHistory<
   TData = Awaited<ReturnType<typeof getConfigHistory>>,
-  TError = AxiosError<ErrorModel>,
+  TError = ErrorModel,
 >(
   historyId: number,
   options?: {
@@ -166,7 +168,7 @@ export function useGetConfigHistory<
         >,
         "initialData"
       >;
-    axios?: AxiosRequestConfig;
+    request?: SecondParameter<typeof request>;
   },
   queryClient?: QueryClient,
 ): UseQueryResult<TData, TError> & {
@@ -174,7 +176,7 @@ export function useGetConfigHistory<
 };
 export function useGetConfigHistory<
   TData = Awaited<ReturnType<typeof getConfigHistory>>,
-  TError = AxiosError<ErrorModel>,
+  TError = ErrorModel,
 >(
   historyId: number,
   options?: {
@@ -185,7 +187,7 @@ export function useGetConfigHistory<
         TData
       >
     >;
-    axios?: AxiosRequestConfig;
+    request?: SecondParameter<typeof request>;
   },
   queryClient?: QueryClient,
 ): UseQueryResult<TData, TError> & {
@@ -197,7 +199,7 @@ export function useGetConfigHistory<
 
 export function useGetConfigHistory<
   TData = Awaited<ReturnType<typeof getConfigHistory>>,
-  TError = AxiosError<ErrorModel>,
+  TError = ErrorModel,
 >(
   historyId: number,
   options?: {
@@ -208,7 +210,7 @@ export function useGetConfigHistory<
         TData
       >
     >;
-    axios?: AxiosRequestConfig;
+    request?: SecondParameter<typeof request>;
   },
   queryClient?: QueryClient,
 ): UseQueryResult<TData, TError> & {
@@ -231,13 +233,16 @@ export function useGetConfigHistory<
  */
 export const deleteConfig = (
   configId: number,
-  options?: AxiosRequestConfig,
-): Promise<AxiosResponse<void>> => {
-  return axios.default.delete(`/api/v1/admin/configs/${configId}`, options);
+  options?: SecondParameter<typeof request>,
+) => {
+  return request<void>(
+    { url: `/api/v1/admin/configs/${configId}`, method: "DELETE" },
+    options,
+  );
 };
 
 export const getDeleteConfigMutationOptions = <
-  TError = AxiosError<ErrorModel>,
+  TError = ErrorModel,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
@@ -246,7 +251,7 @@ export const getDeleteConfigMutationOptions = <
     { configId: number },
     TContext
   >;
-  axios?: AxiosRequestConfig;
+  request?: SecondParameter<typeof request>;
 }): UseMutationOptions<
   Awaited<ReturnType<typeof deleteConfig>>,
   TError,
@@ -254,13 +259,13 @@ export const getDeleteConfigMutationOptions = <
   TContext
 > => {
   const mutationKey = ["deleteConfig"];
-  const { mutation: mutationOptions, axios: axiosOptions } = options
+  const { mutation: mutationOptions, request: requestOptions } = options
     ? options.mutation &&
       "mutationKey" in options.mutation &&
       options.mutation.mutationKey
       ? options
       : { ...options, mutation: { ...options.mutation, mutationKey } }
-    : { mutation: { mutationKey }, axios: undefined };
+    : { mutation: { mutationKey }, request: undefined };
 
   const mutationFn: MutationFunction<
     Awaited<ReturnType<typeof deleteConfig>>,
@@ -268,7 +273,7 @@ export const getDeleteConfigMutationOptions = <
   > = (props) => {
     const { configId } = props ?? {};
 
-    return deleteConfig(configId, axiosOptions);
+    return deleteConfig(configId, requestOptions);
   };
 
   return { mutationFn, ...mutationOptions };
@@ -278,15 +283,12 @@ export type DeleteConfigMutationResult = NonNullable<
   Awaited<ReturnType<typeof deleteConfig>>
 >;
 
-export type DeleteConfigMutationError = AxiosError<ErrorModel>;
+export type DeleteConfigMutationError = ErrorModel;
 
 /**
  * @summary 删除配置
  */
-export const useDeleteConfig = <
-  TError = AxiosError<ErrorModel>,
-  TContext = unknown,
->(
+export const useDeleteConfig = <TError = ErrorModel, TContext = unknown>(
   options?: {
     mutation?: UseMutationOptions<
       Awaited<ReturnType<typeof deleteConfig>>,
@@ -294,7 +296,7 @@ export const useDeleteConfig = <
       { configId: number },
       TContext
     >;
-    axios?: AxiosRequestConfig;
+    request?: SecondParameter<typeof request>;
   },
   queryClient?: QueryClient,
 ): UseMutationResult<
@@ -312,9 +314,13 @@ export const useDeleteConfig = <
  */
 export const getConfig = (
   configId: number,
-  options?: AxiosRequestConfig,
-): Promise<AxiosResponse<Response>> => {
-  return axios.default.get(`/api/v1/admin/configs/${configId}`, options);
+  options?: SecondParameter<typeof request>,
+  signal?: AbortSignal,
+) => {
+  return request<Response>(
+    { url: `/api/v1/admin/configs/${configId}`, method: "GET", signal },
+    options,
+  );
 };
 
 export const getGetConfigQueryKey = (configId?: number) => {
@@ -323,23 +329,23 @@ export const getGetConfigQueryKey = (configId?: number) => {
 
 export const getGetConfigQueryOptions = <
   TData = Awaited<ReturnType<typeof getConfig>>,
-  TError = AxiosError<ErrorModel>,
+  TError = ErrorModel,
 >(
   configId: number,
   options?: {
     query?: Partial<
       UseQueryOptions<Awaited<ReturnType<typeof getConfig>>, TError, TData>
     >;
-    axios?: AxiosRequestConfig;
+    request?: SecondParameter<typeof request>;
   },
 ) => {
-  const { query: queryOptions, axios: axiosOptions } = options ?? {};
+  const { query: queryOptions, request: requestOptions } = options ?? {};
 
   const queryKey = queryOptions?.queryKey ?? getGetConfigQueryKey(configId);
 
   const queryFn: QueryFunction<Awaited<ReturnType<typeof getConfig>>> = ({
     signal,
-  }) => getConfig(configId, { signal, ...axiosOptions });
+  }) => getConfig(configId, requestOptions, signal);
 
   return {
     queryKey,
@@ -354,11 +360,11 @@ export const getGetConfigQueryOptions = <
 export type GetConfigQueryResult = NonNullable<
   Awaited<ReturnType<typeof getConfig>>
 >;
-export type GetConfigQueryError = AxiosError<ErrorModel>;
+export type GetConfigQueryError = ErrorModel;
 
 export function useGetConfig<
   TData = Awaited<ReturnType<typeof getConfig>>,
-  TError = AxiosError<ErrorModel>,
+  TError = ErrorModel,
 >(
   configId: number,
   options: {
@@ -373,7 +379,7 @@ export function useGetConfig<
         >,
         "initialData"
       >;
-    axios?: AxiosRequestConfig;
+    request?: SecondParameter<typeof request>;
   },
   queryClient?: QueryClient,
 ): DefinedUseQueryResult<TData, TError> & {
@@ -381,7 +387,7 @@ export function useGetConfig<
 };
 export function useGetConfig<
   TData = Awaited<ReturnType<typeof getConfig>>,
-  TError = AxiosError<ErrorModel>,
+  TError = ErrorModel,
 >(
   configId: number,
   options?: {
@@ -396,7 +402,7 @@ export function useGetConfig<
         >,
         "initialData"
       >;
-    axios?: AxiosRequestConfig;
+    request?: SecondParameter<typeof request>;
   },
   queryClient?: QueryClient,
 ): UseQueryResult<TData, TError> & {
@@ -404,14 +410,14 @@ export function useGetConfig<
 };
 export function useGetConfig<
   TData = Awaited<ReturnType<typeof getConfig>>,
-  TError = AxiosError<ErrorModel>,
+  TError = ErrorModel,
 >(
   configId: number,
   options?: {
     query?: Partial<
       UseQueryOptions<Awaited<ReturnType<typeof getConfig>>, TError, TData>
     >;
-    axios?: AxiosRequestConfig;
+    request?: SecondParameter<typeof request>;
   },
   queryClient?: QueryClient,
 ): UseQueryResult<TData, TError> & {
@@ -423,14 +429,14 @@ export function useGetConfig<
 
 export function useGetConfig<
   TData = Awaited<ReturnType<typeof getConfig>>,
-  TError = AxiosError<ErrorModel>,
+  TError = ErrorModel,
 >(
   configId: number,
   options?: {
     query?: Partial<
       UseQueryOptions<Awaited<ReturnType<typeof getConfig>>, TError, TData>
     >;
-    axios?: AxiosRequestConfig;
+    request?: SecondParameter<typeof request>;
   },
   queryClient?: QueryClient,
 ): UseQueryResult<TData, TError> & {
@@ -454,17 +460,21 @@ export function useGetConfig<
 export const updateConfig = (
   configId: number,
   updateConfigReq: NonReadonly<UpdateConfigReq>,
-  options?: AxiosRequestConfig,
-): Promise<AxiosResponse<Response>> => {
-  return axios.default.put(
-    `/api/v1/admin/configs/${configId}`,
-    updateConfigReq,
+  options?: SecondParameter<typeof request>,
+) => {
+  return request<Response>(
+    {
+      url: `/api/v1/admin/configs/${configId}`,
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      data: updateConfigReq,
+    },
     options,
   );
 };
 
 export const getUpdateConfigMutationOptions = <
-  TError = AxiosError<ErrorModel>,
+  TError = ErrorModel,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
@@ -473,7 +483,7 @@ export const getUpdateConfigMutationOptions = <
     { configId: number; data: NonReadonly<UpdateConfigReq> },
     TContext
   >;
-  axios?: AxiosRequestConfig;
+  request?: SecondParameter<typeof request>;
 }): UseMutationOptions<
   Awaited<ReturnType<typeof updateConfig>>,
   TError,
@@ -481,13 +491,13 @@ export const getUpdateConfigMutationOptions = <
   TContext
 > => {
   const mutationKey = ["updateConfig"];
-  const { mutation: mutationOptions, axios: axiosOptions } = options
+  const { mutation: mutationOptions, request: requestOptions } = options
     ? options.mutation &&
       "mutationKey" in options.mutation &&
       options.mutation.mutationKey
       ? options
       : { ...options, mutation: { ...options.mutation, mutationKey } }
-    : { mutation: { mutationKey }, axios: undefined };
+    : { mutation: { mutationKey }, request: undefined };
 
   const mutationFn: MutationFunction<
     Awaited<ReturnType<typeof updateConfig>>,
@@ -495,7 +505,7 @@ export const getUpdateConfigMutationOptions = <
   > = (props) => {
     const { configId, data } = props ?? {};
 
-    return updateConfig(configId, data, axiosOptions);
+    return updateConfig(configId, data, requestOptions);
   };
 
   return { mutationFn, ...mutationOptions };
@@ -505,15 +515,12 @@ export type UpdateConfigMutationResult = NonNullable<
   Awaited<ReturnType<typeof updateConfig>>
 >;
 export type UpdateConfigMutationBody = NonReadonly<UpdateConfigReq>;
-export type UpdateConfigMutationError = AxiosError<ErrorModel>;
+export type UpdateConfigMutationError = ErrorModel;
 
 /**
  * @summary 更新配置
  */
-export const useUpdateConfig = <
-  TError = AxiosError<ErrorModel>,
-  TContext = unknown,
->(
+export const useUpdateConfig = <TError = ErrorModel, TContext = unknown>(
   options?: {
     mutation?: UseMutationOptions<
       Awaited<ReturnType<typeof updateConfig>>,
@@ -521,7 +528,7 @@ export const useUpdateConfig = <
       { configId: number; data: NonReadonly<UpdateConfigReq> },
       TContext
     >;
-    axios?: AxiosRequestConfig;
+    request?: SecondParameter<typeof request>;
   },
   queryClient?: QueryClient,
 ): UseMutationResult<
@@ -539,10 +546,11 @@ export const useUpdateConfig = <
  */
 export const listConfigHistory = (
   configId: number,
-  options?: AxiosRequestConfig,
-): Promise<AxiosResponse<Response>> => {
-  return axios.default.get(
-    `/api/v1/admin/configs/${configId}/history`,
+  options?: SecondParameter<typeof request>,
+  signal?: AbortSignal,
+) => {
+  return request<Response>(
+    { url: `/api/v1/admin/configs/${configId}/history`, method: "GET", signal },
     options,
   );
 };
@@ -553,7 +561,7 @@ export const getListConfigHistoryQueryKey = (configId?: number) => {
 
 export const getListConfigHistoryQueryOptions = <
   TData = Awaited<ReturnType<typeof listConfigHistory>>,
-  TError = AxiosError<ErrorModel>,
+  TError = ErrorModel,
 >(
   configId: number,
   options?: {
@@ -564,17 +572,17 @@ export const getListConfigHistoryQueryOptions = <
         TData
       >
     >;
-    axios?: AxiosRequestConfig;
+    request?: SecondParameter<typeof request>;
   },
 ) => {
-  const { query: queryOptions, axios: axiosOptions } = options ?? {};
+  const { query: queryOptions, request: requestOptions } = options ?? {};
 
   const queryKey =
     queryOptions?.queryKey ?? getListConfigHistoryQueryKey(configId);
 
   const queryFn: QueryFunction<
     Awaited<ReturnType<typeof listConfigHistory>>
-  > = ({ signal }) => listConfigHistory(configId, { signal, ...axiosOptions });
+  > = ({ signal }) => listConfigHistory(configId, requestOptions, signal);
 
   return {
     queryKey,
@@ -591,11 +599,11 @@ export const getListConfigHistoryQueryOptions = <
 export type ListConfigHistoryQueryResult = NonNullable<
   Awaited<ReturnType<typeof listConfigHistory>>
 >;
-export type ListConfigHistoryQueryError = AxiosError<ErrorModel>;
+export type ListConfigHistoryQueryError = ErrorModel;
 
 export function useListConfigHistory<
   TData = Awaited<ReturnType<typeof listConfigHistory>>,
-  TError = AxiosError<ErrorModel>,
+  TError = ErrorModel,
 >(
   configId: number,
   options: {
@@ -614,7 +622,7 @@ export function useListConfigHistory<
         >,
         "initialData"
       >;
-    axios?: AxiosRequestConfig;
+    request?: SecondParameter<typeof request>;
   },
   queryClient?: QueryClient,
 ): DefinedUseQueryResult<TData, TError> & {
@@ -622,7 +630,7 @@ export function useListConfigHistory<
 };
 export function useListConfigHistory<
   TData = Awaited<ReturnType<typeof listConfigHistory>>,
-  TError = AxiosError<ErrorModel>,
+  TError = ErrorModel,
 >(
   configId: number,
   options?: {
@@ -641,7 +649,7 @@ export function useListConfigHistory<
         >,
         "initialData"
       >;
-    axios?: AxiosRequestConfig;
+    request?: SecondParameter<typeof request>;
   },
   queryClient?: QueryClient,
 ): UseQueryResult<TData, TError> & {
@@ -649,7 +657,7 @@ export function useListConfigHistory<
 };
 export function useListConfigHistory<
   TData = Awaited<ReturnType<typeof listConfigHistory>>,
-  TError = AxiosError<ErrorModel>,
+  TError = ErrorModel,
 >(
   configId: number,
   options?: {
@@ -660,7 +668,7 @@ export function useListConfigHistory<
         TData
       >
     >;
-    axios?: AxiosRequestConfig;
+    request?: SecondParameter<typeof request>;
   },
   queryClient?: QueryClient,
 ): UseQueryResult<TData, TError> & {
@@ -672,7 +680,7 @@ export function useListConfigHistory<
 
 export function useListConfigHistory<
   TData = Awaited<ReturnType<typeof listConfigHistory>>,
-  TError = AxiosError<ErrorModel>,
+  TError = ErrorModel,
 >(
   configId: number,
   options?: {
@@ -683,7 +691,7 @@ export function useListConfigHistory<
         TData
       >
     >;
-    axios?: AxiosRequestConfig;
+    request?: SecondParameter<typeof request>;
   },
   queryClient?: QueryClient,
 ): UseQueryResult<TData, TError> & {
@@ -708,17 +716,23 @@ export const rollbackConfig = (
   configId: number,
   historyId: number,
   rollbackReq: NonReadonly<RollbackReq>,
-  options?: AxiosRequestConfig,
-): Promise<AxiosResponse<Response>> => {
-  return axios.default.post(
-    `/api/v1/admin/configs/${configId}/rollback/${historyId}`,
-    rollbackReq,
+  options?: SecondParameter<typeof request>,
+  signal?: AbortSignal,
+) => {
+  return request<Response>(
+    {
+      url: `/api/v1/admin/configs/${configId}/rollback/${historyId}`,
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      data: rollbackReq,
+      signal,
+    },
     options,
   );
 };
 
 export const getRollbackConfigMutationOptions = <
-  TError = AxiosError<ErrorModel>,
+  TError = ErrorModel,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
@@ -727,7 +741,7 @@ export const getRollbackConfigMutationOptions = <
     { configId: number; historyId: number; data: NonReadonly<RollbackReq> },
     TContext
   >;
-  axios?: AxiosRequestConfig;
+  request?: SecondParameter<typeof request>;
 }): UseMutationOptions<
   Awaited<ReturnType<typeof rollbackConfig>>,
   TError,
@@ -735,13 +749,13 @@ export const getRollbackConfigMutationOptions = <
   TContext
 > => {
   const mutationKey = ["rollbackConfig"];
-  const { mutation: mutationOptions, axios: axiosOptions } = options
+  const { mutation: mutationOptions, request: requestOptions } = options
     ? options.mutation &&
       "mutationKey" in options.mutation &&
       options.mutation.mutationKey
       ? options
       : { ...options, mutation: { ...options.mutation, mutationKey } }
-    : { mutation: { mutationKey }, axios: undefined };
+    : { mutation: { mutationKey }, request: undefined };
 
   const mutationFn: MutationFunction<
     Awaited<ReturnType<typeof rollbackConfig>>,
@@ -749,7 +763,7 @@ export const getRollbackConfigMutationOptions = <
   > = (props) => {
     const { configId, historyId, data } = props ?? {};
 
-    return rollbackConfig(configId, historyId, data, axiosOptions);
+    return rollbackConfig(configId, historyId, data, requestOptions);
   };
 
   return { mutationFn, ...mutationOptions };
@@ -759,15 +773,12 @@ export type RollbackConfigMutationResult = NonNullable<
   Awaited<ReturnType<typeof rollbackConfig>>
 >;
 export type RollbackConfigMutationBody = NonReadonly<RollbackReq>;
-export type RollbackConfigMutationError = AxiosError<ErrorModel>;
+export type RollbackConfigMutationError = ErrorModel;
 
 /**
  * @summary 回滚配置
  */
-export const useRollbackConfig = <
-  TError = AxiosError<ErrorModel>,
-  TContext = unknown,
->(
+export const useRollbackConfig = <TError = ErrorModel, TContext = unknown>(
   options?: {
     mutation?: UseMutationOptions<
       Awaited<ReturnType<typeof rollbackConfig>>,
@@ -775,7 +786,7 @@ export const useRollbackConfig = <
       { configId: number; historyId: number; data: NonReadonly<RollbackReq> },
       TContext
     >;
-    axios?: AxiosRequestConfig;
+    request?: SecondParameter<typeof request>;
   },
   queryClient?: QueryClient,
 ): UseMutationResult<
@@ -793,10 +804,15 @@ export const useRollbackConfig = <
  */
 export const listConfigs = (
   namespaceId: number,
-  options?: AxiosRequestConfig,
-): Promise<AxiosResponse<Response>> => {
-  return axios.default.get(
-    `/api/v1/admin/namespaces/${namespaceId}/configs`,
+  options?: SecondParameter<typeof request>,
+  signal?: AbortSignal,
+) => {
+  return request<Response>(
+    {
+      url: `/api/v1/admin/namespaces/${namespaceId}/configs`,
+      method: "GET",
+      signal,
+    },
     options,
   );
 };
@@ -807,24 +823,24 @@ export const getListConfigsQueryKey = (namespaceId?: number) => {
 
 export const getListConfigsQueryOptions = <
   TData = Awaited<ReturnType<typeof listConfigs>>,
-  TError = AxiosError<ErrorModel>,
+  TError = ErrorModel,
 >(
   namespaceId: number,
   options?: {
     query?: Partial<
       UseQueryOptions<Awaited<ReturnType<typeof listConfigs>>, TError, TData>
     >;
-    axios?: AxiosRequestConfig;
+    request?: SecondParameter<typeof request>;
   },
 ) => {
-  const { query: queryOptions, axios: axiosOptions } = options ?? {};
+  const { query: queryOptions, request: requestOptions } = options ?? {};
 
   const queryKey =
     queryOptions?.queryKey ?? getListConfigsQueryKey(namespaceId);
 
   const queryFn: QueryFunction<Awaited<ReturnType<typeof listConfigs>>> = ({
     signal,
-  }) => listConfigs(namespaceId, { signal, ...axiosOptions });
+  }) => listConfigs(namespaceId, requestOptions, signal);
 
   return {
     queryKey,
@@ -841,11 +857,11 @@ export const getListConfigsQueryOptions = <
 export type ListConfigsQueryResult = NonNullable<
   Awaited<ReturnType<typeof listConfigs>>
 >;
-export type ListConfigsQueryError = AxiosError<ErrorModel>;
+export type ListConfigsQueryError = ErrorModel;
 
 export function useListConfigs<
   TData = Awaited<ReturnType<typeof listConfigs>>,
-  TError = AxiosError<ErrorModel>,
+  TError = ErrorModel,
 >(
   namespaceId: number,
   options: {
@@ -860,7 +876,7 @@ export function useListConfigs<
         >,
         "initialData"
       >;
-    axios?: AxiosRequestConfig;
+    request?: SecondParameter<typeof request>;
   },
   queryClient?: QueryClient,
 ): DefinedUseQueryResult<TData, TError> & {
@@ -868,7 +884,7 @@ export function useListConfigs<
 };
 export function useListConfigs<
   TData = Awaited<ReturnType<typeof listConfigs>>,
-  TError = AxiosError<ErrorModel>,
+  TError = ErrorModel,
 >(
   namespaceId: number,
   options?: {
@@ -883,7 +899,7 @@ export function useListConfigs<
         >,
         "initialData"
       >;
-    axios?: AxiosRequestConfig;
+    request?: SecondParameter<typeof request>;
   },
   queryClient?: QueryClient,
 ): UseQueryResult<TData, TError> & {
@@ -891,14 +907,14 @@ export function useListConfigs<
 };
 export function useListConfigs<
   TData = Awaited<ReturnType<typeof listConfigs>>,
-  TError = AxiosError<ErrorModel>,
+  TError = ErrorModel,
 >(
   namespaceId: number,
   options?: {
     query?: Partial<
       UseQueryOptions<Awaited<ReturnType<typeof listConfigs>>, TError, TData>
     >;
-    axios?: AxiosRequestConfig;
+    request?: SecondParameter<typeof request>;
   },
   queryClient?: QueryClient,
 ): UseQueryResult<TData, TError> & {
@@ -910,14 +926,14 @@ export function useListConfigs<
 
 export function useListConfigs<
   TData = Awaited<ReturnType<typeof listConfigs>>,
-  TError = AxiosError<ErrorModel>,
+  TError = ErrorModel,
 >(
   namespaceId: number,
   options?: {
     query?: Partial<
       UseQueryOptions<Awaited<ReturnType<typeof listConfigs>>, TError, TData>
     >;
-    axios?: AxiosRequestConfig;
+    request?: SecondParameter<typeof request>;
   },
   queryClient?: QueryClient,
 ): UseQueryResult<TData, TError> & {
@@ -941,17 +957,23 @@ export function useListConfigs<
 export const createConfig = (
   namespaceId: number,
   createConfigReq: NonReadonly<CreateConfigReq>,
-  options?: AxiosRequestConfig,
-): Promise<AxiosResponse<Response>> => {
-  return axios.default.post(
-    `/api/v1/admin/namespaces/${namespaceId}/configs`,
-    createConfigReq,
+  options?: SecondParameter<typeof request>,
+  signal?: AbortSignal,
+) => {
+  return request<Response>(
+    {
+      url: `/api/v1/admin/namespaces/${namespaceId}/configs`,
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      data: createConfigReq,
+      signal,
+    },
     options,
   );
 };
 
 export const getCreateConfigMutationOptions = <
-  TError = AxiosError<ErrorModel>,
+  TError = ErrorModel,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
@@ -960,7 +982,7 @@ export const getCreateConfigMutationOptions = <
     { namespaceId: number; data: NonReadonly<CreateConfigReq> },
     TContext
   >;
-  axios?: AxiosRequestConfig;
+  request?: SecondParameter<typeof request>;
 }): UseMutationOptions<
   Awaited<ReturnType<typeof createConfig>>,
   TError,
@@ -968,13 +990,13 @@ export const getCreateConfigMutationOptions = <
   TContext
 > => {
   const mutationKey = ["createConfig"];
-  const { mutation: mutationOptions, axios: axiosOptions } = options
+  const { mutation: mutationOptions, request: requestOptions } = options
     ? options.mutation &&
       "mutationKey" in options.mutation &&
       options.mutation.mutationKey
       ? options
       : { ...options, mutation: { ...options.mutation, mutationKey } }
-    : { mutation: { mutationKey }, axios: undefined };
+    : { mutation: { mutationKey }, request: undefined };
 
   const mutationFn: MutationFunction<
     Awaited<ReturnType<typeof createConfig>>,
@@ -982,7 +1004,7 @@ export const getCreateConfigMutationOptions = <
   > = (props) => {
     const { namespaceId, data } = props ?? {};
 
-    return createConfig(namespaceId, data, axiosOptions);
+    return createConfig(namespaceId, data, requestOptions);
   };
 
   return { mutationFn, ...mutationOptions };
@@ -992,15 +1014,12 @@ export type CreateConfigMutationResult = NonNullable<
   Awaited<ReturnType<typeof createConfig>>
 >;
 export type CreateConfigMutationBody = NonReadonly<CreateConfigReq>;
-export type CreateConfigMutationError = AxiosError<ErrorModel>;
+export type CreateConfigMutationError = ErrorModel;
 
 /**
  * @summary 创建配置
  */
-export const useCreateConfig = <
-  TError = AxiosError<ErrorModel>,
-  TContext = unknown,
->(
+export const useCreateConfig = <TError = ErrorModel, TContext = unknown>(
   options?: {
     mutation?: UseMutationOptions<
       Awaited<ReturnType<typeof createConfig>>,
@@ -1008,7 +1027,7 @@ export const useCreateConfig = <
       { namespaceId: number; data: NonReadonly<CreateConfigReq> },
       TContext
     >;
-    axios?: AxiosRequestConfig;
+    request?: SecondParameter<typeof request>;
   },
   queryClient?: QueryClient,
 ): UseMutationResult<

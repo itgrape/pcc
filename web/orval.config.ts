@@ -10,6 +10,12 @@ export default defineConfig({
       mode: "tags-split",
       mock: false,
       prettier: true,
+      override: {
+        mutator: {
+          path: "./src/shared/api/http.ts",
+          name: "request",
+        },
+      },
     },
     hooks: {
       afterAllFilesWrite: "npx prettier --write",

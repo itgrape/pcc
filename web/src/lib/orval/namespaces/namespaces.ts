@@ -20,9 +20,6 @@ import type {
   UseQueryResult,
 } from "@tanstack/react-query";
 
-import * as axios from "axios";
-import type { AxiosError, AxiosRequestConfig, AxiosResponse } from "axios";
-
 import type {
   CreateNamespaceReq,
   ErrorModel,
@@ -30,6 +27,8 @@ import type {
   Response,
   UpdateNamespaceReq,
 } from ".././schemas";
+
+import { request } from "../../../shared/api/http";
 
 // https://stackoverflow.com/questions/49579094/typescript-conditional-types-filter-out-readonly-properties-pick-only-requir/49579497#49579497
 type IfEquals<X, Y, A = X, B = never> =
@@ -59,17 +58,20 @@ type NonReadonly<T> = [T] extends [UnionToIntersection<T>]
     }
   : DistributeReadOnlyOverUnions<T>;
 
+type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
+
 /**
  * @summary 命名空间列表
  */
 export const listNamespaces = (
   params?: ListNamespacesParams,
-  options?: AxiosRequestConfig,
-): Promise<AxiosResponse<Response>> => {
-  return axios.default.get(`/api/v1/admin/namespaces`, {
-    ...options,
-    params: { ...params, ...options?.params },
-  });
+  options?: SecondParameter<typeof request>,
+  signal?: AbortSignal,
+) => {
+  return request<Response>(
+    { url: `/api/v1/admin/namespaces`, method: "GET", params, signal },
+    options,
+  );
 };
 
 export const getListNamespacesQueryKey = (params?: ListNamespacesParams) => {
@@ -78,23 +80,23 @@ export const getListNamespacesQueryKey = (params?: ListNamespacesParams) => {
 
 export const getListNamespacesQueryOptions = <
   TData = Awaited<ReturnType<typeof listNamespaces>>,
-  TError = AxiosError<ErrorModel>,
+  TError = ErrorModel,
 >(
   params?: ListNamespacesParams,
   options?: {
     query?: Partial<
       UseQueryOptions<Awaited<ReturnType<typeof listNamespaces>>, TError, TData>
     >;
-    axios?: AxiosRequestConfig;
+    request?: SecondParameter<typeof request>;
   },
 ) => {
-  const { query: queryOptions, axios: axiosOptions } = options ?? {};
+  const { query: queryOptions, request: requestOptions } = options ?? {};
 
   const queryKey = queryOptions?.queryKey ?? getListNamespacesQueryKey(params);
 
   const queryFn: QueryFunction<Awaited<ReturnType<typeof listNamespaces>>> = ({
     signal,
-  }) => listNamespaces(params, { signal, ...axiosOptions });
+  }) => listNamespaces(params, requestOptions, signal);
 
   return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
     Awaited<ReturnType<typeof listNamespaces>>,
@@ -106,11 +108,11 @@ export const getListNamespacesQueryOptions = <
 export type ListNamespacesQueryResult = NonNullable<
   Awaited<ReturnType<typeof listNamespaces>>
 >;
-export type ListNamespacesQueryError = AxiosError<ErrorModel>;
+export type ListNamespacesQueryError = ErrorModel;
 
 export function useListNamespaces<
   TData = Awaited<ReturnType<typeof listNamespaces>>,
-  TError = AxiosError<ErrorModel>,
+  TError = ErrorModel,
 >(
   params: undefined | ListNamespacesParams,
   options: {
@@ -125,7 +127,7 @@ export function useListNamespaces<
         >,
         "initialData"
       >;
-    axios?: AxiosRequestConfig;
+    request?: SecondParameter<typeof request>;
   },
   queryClient?: QueryClient,
 ): DefinedUseQueryResult<TData, TError> & {
@@ -133,7 +135,7 @@ export function useListNamespaces<
 };
 export function useListNamespaces<
   TData = Awaited<ReturnType<typeof listNamespaces>>,
-  TError = AxiosError<ErrorModel>,
+  TError = ErrorModel,
 >(
   params?: ListNamespacesParams,
   options?: {
@@ -148,7 +150,7 @@ export function useListNamespaces<
         >,
         "initialData"
       >;
-    axios?: AxiosRequestConfig;
+    request?: SecondParameter<typeof request>;
   },
   queryClient?: QueryClient,
 ): UseQueryResult<TData, TError> & {
@@ -156,14 +158,14 @@ export function useListNamespaces<
 };
 export function useListNamespaces<
   TData = Awaited<ReturnType<typeof listNamespaces>>,
-  TError = AxiosError<ErrorModel>,
+  TError = ErrorModel,
 >(
   params?: ListNamespacesParams,
   options?: {
     query?: Partial<
       UseQueryOptions<Awaited<ReturnType<typeof listNamespaces>>, TError, TData>
     >;
-    axios?: AxiosRequestConfig;
+    request?: SecondParameter<typeof request>;
   },
   queryClient?: QueryClient,
 ): UseQueryResult<TData, TError> & {
@@ -175,14 +177,14 @@ export function useListNamespaces<
 
 export function useListNamespaces<
   TData = Awaited<ReturnType<typeof listNamespaces>>,
-  TError = AxiosError<ErrorModel>,
+  TError = ErrorModel,
 >(
   params?: ListNamespacesParams,
   options?: {
     query?: Partial<
       UseQueryOptions<Awaited<ReturnType<typeof listNamespaces>>, TError, TData>
     >;
-    axios?: AxiosRequestConfig;
+    request?: SecondParameter<typeof request>;
   },
   queryClient?: QueryClient,
 ): UseQueryResult<TData, TError> & {
@@ -205,17 +207,23 @@ export function useListNamespaces<
  */
 export const createNamespace = (
   createNamespaceReq: NonReadonly<CreateNamespaceReq>,
-  options?: AxiosRequestConfig,
-): Promise<AxiosResponse<Response>> => {
-  return axios.default.post(
-    `/api/v1/admin/namespaces`,
-    createNamespaceReq,
+  options?: SecondParameter<typeof request>,
+  signal?: AbortSignal,
+) => {
+  return request<Response>(
+    {
+      url: `/api/v1/admin/namespaces`,
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      data: createNamespaceReq,
+      signal,
+    },
     options,
   );
 };
 
 export const getCreateNamespaceMutationOptions = <
-  TError = AxiosError<ErrorModel>,
+  TError = ErrorModel,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
@@ -224,7 +232,7 @@ export const getCreateNamespaceMutationOptions = <
     { data: NonReadonly<CreateNamespaceReq> },
     TContext
   >;
-  axios?: AxiosRequestConfig;
+  request?: SecondParameter<typeof request>;
 }): UseMutationOptions<
   Awaited<ReturnType<typeof createNamespace>>,
   TError,
@@ -232,13 +240,13 @@ export const getCreateNamespaceMutationOptions = <
   TContext
 > => {
   const mutationKey = ["createNamespace"];
-  const { mutation: mutationOptions, axios: axiosOptions } = options
+  const { mutation: mutationOptions, request: requestOptions } = options
     ? options.mutation &&
       "mutationKey" in options.mutation &&
       options.mutation.mutationKey
       ? options
       : { ...options, mutation: { ...options.mutation, mutationKey } }
-    : { mutation: { mutationKey }, axios: undefined };
+    : { mutation: { mutationKey }, request: undefined };
 
   const mutationFn: MutationFunction<
     Awaited<ReturnType<typeof createNamespace>>,
@@ -246,7 +254,7 @@ export const getCreateNamespaceMutationOptions = <
   > = (props) => {
     const { data } = props ?? {};
 
-    return createNamespace(data, axiosOptions);
+    return createNamespace(data, requestOptions);
   };
 
   return { mutationFn, ...mutationOptions };
@@ -256,15 +264,12 @@ export type CreateNamespaceMutationResult = NonNullable<
   Awaited<ReturnType<typeof createNamespace>>
 >;
 export type CreateNamespaceMutationBody = NonReadonly<CreateNamespaceReq>;
-export type CreateNamespaceMutationError = AxiosError<ErrorModel>;
+export type CreateNamespaceMutationError = ErrorModel;
 
 /**
  * @summary 创建命名空间
  */
-export const useCreateNamespace = <
-  TError = AxiosError<ErrorModel>,
-  TContext = unknown,
->(
+export const useCreateNamespace = <TError = ErrorModel, TContext = unknown>(
   options?: {
     mutation?: UseMutationOptions<
       Awaited<ReturnType<typeof createNamespace>>,
@@ -272,7 +277,7 @@ export const useCreateNamespace = <
       { data: NonReadonly<CreateNamespaceReq> },
       TContext
     >;
-    axios?: AxiosRequestConfig;
+    request?: SecondParameter<typeof request>;
   },
   queryClient?: QueryClient,
 ): UseMutationResult<
@@ -290,16 +295,16 @@ export const useCreateNamespace = <
  */
 export const deleteNamespace = (
   namespaceId: number,
-  options?: AxiosRequestConfig,
-): Promise<AxiosResponse<void>> => {
-  return axios.default.delete(
-    `/api/v1/admin/namespaces/${namespaceId}`,
+  options?: SecondParameter<typeof request>,
+) => {
+  return request<void>(
+    { url: `/api/v1/admin/namespaces/${namespaceId}`, method: "DELETE" },
     options,
   );
 };
 
 export const getDeleteNamespaceMutationOptions = <
-  TError = AxiosError<ErrorModel>,
+  TError = ErrorModel,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
@@ -308,7 +313,7 @@ export const getDeleteNamespaceMutationOptions = <
     { namespaceId: number },
     TContext
   >;
-  axios?: AxiosRequestConfig;
+  request?: SecondParameter<typeof request>;
 }): UseMutationOptions<
   Awaited<ReturnType<typeof deleteNamespace>>,
   TError,
@@ -316,13 +321,13 @@ export const getDeleteNamespaceMutationOptions = <
   TContext
 > => {
   const mutationKey = ["deleteNamespace"];
-  const { mutation: mutationOptions, axios: axiosOptions } = options
+  const { mutation: mutationOptions, request: requestOptions } = options
     ? options.mutation &&
       "mutationKey" in options.mutation &&
       options.mutation.mutationKey
       ? options
       : { ...options, mutation: { ...options.mutation, mutationKey } }
-    : { mutation: { mutationKey }, axios: undefined };
+    : { mutation: { mutationKey }, request: undefined };
 
   const mutationFn: MutationFunction<
     Awaited<ReturnType<typeof deleteNamespace>>,
@@ -330,7 +335,7 @@ export const getDeleteNamespaceMutationOptions = <
   > = (props) => {
     const { namespaceId } = props ?? {};
 
-    return deleteNamespace(namespaceId, axiosOptions);
+    return deleteNamespace(namespaceId, requestOptions);
   };
 
   return { mutationFn, ...mutationOptions };
@@ -340,15 +345,12 @@ export type DeleteNamespaceMutationResult = NonNullable<
   Awaited<ReturnType<typeof deleteNamespace>>
 >;
 
-export type DeleteNamespaceMutationError = AxiosError<ErrorModel>;
+export type DeleteNamespaceMutationError = ErrorModel;
 
 /**
  * @summary 删除命名空间
  */
-export const useDeleteNamespace = <
-  TError = AxiosError<ErrorModel>,
-  TContext = unknown,
->(
+export const useDeleteNamespace = <TError = ErrorModel, TContext = unknown>(
   options?: {
     mutation?: UseMutationOptions<
       Awaited<ReturnType<typeof deleteNamespace>>,
@@ -356,7 +358,7 @@ export const useDeleteNamespace = <
       { namespaceId: number },
       TContext
     >;
-    axios?: AxiosRequestConfig;
+    request?: SecondParameter<typeof request>;
   },
   queryClient?: QueryClient,
 ): UseMutationResult<
@@ -374,9 +376,13 @@ export const useDeleteNamespace = <
  */
 export const getNamespace = (
   namespaceId: number,
-  options?: AxiosRequestConfig,
-): Promise<AxiosResponse<Response>> => {
-  return axios.default.get(`/api/v1/admin/namespaces/${namespaceId}`, options);
+  options?: SecondParameter<typeof request>,
+  signal?: AbortSignal,
+) => {
+  return request<Response>(
+    { url: `/api/v1/admin/namespaces/${namespaceId}`, method: "GET", signal },
+    options,
+  );
 };
 
 export const getGetNamespaceQueryKey = (namespaceId?: number) => {
@@ -385,24 +391,24 @@ export const getGetNamespaceQueryKey = (namespaceId?: number) => {
 
 export const getGetNamespaceQueryOptions = <
   TData = Awaited<ReturnType<typeof getNamespace>>,
-  TError = AxiosError<ErrorModel>,
+  TError = ErrorModel,
 >(
   namespaceId: number,
   options?: {
     query?: Partial<
       UseQueryOptions<Awaited<ReturnType<typeof getNamespace>>, TError, TData>
     >;
-    axios?: AxiosRequestConfig;
+    request?: SecondParameter<typeof request>;
   },
 ) => {
-  const { query: queryOptions, axios: axiosOptions } = options ?? {};
+  const { query: queryOptions, request: requestOptions } = options ?? {};
 
   const queryKey =
     queryOptions?.queryKey ?? getGetNamespaceQueryKey(namespaceId);
 
   const queryFn: QueryFunction<Awaited<ReturnType<typeof getNamespace>>> = ({
     signal,
-  }) => getNamespace(namespaceId, { signal, ...axiosOptions });
+  }) => getNamespace(namespaceId, requestOptions, signal);
 
   return {
     queryKey,
@@ -419,11 +425,11 @@ export const getGetNamespaceQueryOptions = <
 export type GetNamespaceQueryResult = NonNullable<
   Awaited<ReturnType<typeof getNamespace>>
 >;
-export type GetNamespaceQueryError = AxiosError<ErrorModel>;
+export type GetNamespaceQueryError = ErrorModel;
 
 export function useGetNamespace<
   TData = Awaited<ReturnType<typeof getNamespace>>,
-  TError = AxiosError<ErrorModel>,
+  TError = ErrorModel,
 >(
   namespaceId: number,
   options: {
@@ -438,7 +444,7 @@ export function useGetNamespace<
         >,
         "initialData"
       >;
-    axios?: AxiosRequestConfig;
+    request?: SecondParameter<typeof request>;
   },
   queryClient?: QueryClient,
 ): DefinedUseQueryResult<TData, TError> & {
@@ -446,7 +452,7 @@ export function useGetNamespace<
 };
 export function useGetNamespace<
   TData = Awaited<ReturnType<typeof getNamespace>>,
-  TError = AxiosError<ErrorModel>,
+  TError = ErrorModel,
 >(
   namespaceId: number,
   options?: {
@@ -461,7 +467,7 @@ export function useGetNamespace<
         >,
         "initialData"
       >;
-    axios?: AxiosRequestConfig;
+    request?: SecondParameter<typeof request>;
   },
   queryClient?: QueryClient,
 ): UseQueryResult<TData, TError> & {
@@ -469,14 +475,14 @@ export function useGetNamespace<
 };
 export function useGetNamespace<
   TData = Awaited<ReturnType<typeof getNamespace>>,
-  TError = AxiosError<ErrorModel>,
+  TError = ErrorModel,
 >(
   namespaceId: number,
   options?: {
     query?: Partial<
       UseQueryOptions<Awaited<ReturnType<typeof getNamespace>>, TError, TData>
     >;
-    axios?: AxiosRequestConfig;
+    request?: SecondParameter<typeof request>;
   },
   queryClient?: QueryClient,
 ): UseQueryResult<TData, TError> & {
@@ -488,14 +494,14 @@ export function useGetNamespace<
 
 export function useGetNamespace<
   TData = Awaited<ReturnType<typeof getNamespace>>,
-  TError = AxiosError<ErrorModel>,
+  TError = ErrorModel,
 >(
   namespaceId: number,
   options?: {
     query?: Partial<
       UseQueryOptions<Awaited<ReturnType<typeof getNamespace>>, TError, TData>
     >;
-    axios?: AxiosRequestConfig;
+    request?: SecondParameter<typeof request>;
   },
   queryClient?: QueryClient,
 ): UseQueryResult<TData, TError> & {
@@ -519,17 +525,21 @@ export function useGetNamespace<
 export const updateNamespace = (
   namespaceId: number,
   updateNamespaceReq: NonReadonly<UpdateNamespaceReq>,
-  options?: AxiosRequestConfig,
-): Promise<AxiosResponse<Response>> => {
-  return axios.default.put(
-    `/api/v1/admin/namespaces/${namespaceId}`,
-    updateNamespaceReq,
+  options?: SecondParameter<typeof request>,
+) => {
+  return request<Response>(
+    {
+      url: `/api/v1/admin/namespaces/${namespaceId}`,
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      data: updateNamespaceReq,
+    },
     options,
   );
 };
 
 export const getUpdateNamespaceMutationOptions = <
-  TError = AxiosError<ErrorModel>,
+  TError = ErrorModel,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
@@ -538,7 +548,7 @@ export const getUpdateNamespaceMutationOptions = <
     { namespaceId: number; data: NonReadonly<UpdateNamespaceReq> },
     TContext
   >;
-  axios?: AxiosRequestConfig;
+  request?: SecondParameter<typeof request>;
 }): UseMutationOptions<
   Awaited<ReturnType<typeof updateNamespace>>,
   TError,
@@ -546,13 +556,13 @@ export const getUpdateNamespaceMutationOptions = <
   TContext
 > => {
   const mutationKey = ["updateNamespace"];
-  const { mutation: mutationOptions, axios: axiosOptions } = options
+  const { mutation: mutationOptions, request: requestOptions } = options
     ? options.mutation &&
       "mutationKey" in options.mutation &&
       options.mutation.mutationKey
       ? options
       : { ...options, mutation: { ...options.mutation, mutationKey } }
-    : { mutation: { mutationKey }, axios: undefined };
+    : { mutation: { mutationKey }, request: undefined };
 
   const mutationFn: MutationFunction<
     Awaited<ReturnType<typeof updateNamespace>>,
@@ -560,7 +570,7 @@ export const getUpdateNamespaceMutationOptions = <
   > = (props) => {
     const { namespaceId, data } = props ?? {};
 
-    return updateNamespace(namespaceId, data, axiosOptions);
+    return updateNamespace(namespaceId, data, requestOptions);
   };
 
   return { mutationFn, ...mutationOptions };
@@ -570,15 +580,12 @@ export type UpdateNamespaceMutationResult = NonNullable<
   Awaited<ReturnType<typeof updateNamespace>>
 >;
 export type UpdateNamespaceMutationBody = NonReadonly<UpdateNamespaceReq>;
-export type UpdateNamespaceMutationError = AxiosError<ErrorModel>;
+export type UpdateNamespaceMutationError = ErrorModel;
 
 /**
  * @summary 更新命名空间
  */
-export const useUpdateNamespace = <
-  TError = AxiosError<ErrorModel>,
-  TContext = unknown,
->(
+export const useUpdateNamespace = <TError = ErrorModel, TContext = unknown>(
   options?: {
     mutation?: UseMutationOptions<
       Awaited<ReturnType<typeof updateNamespace>>,
@@ -586,7 +593,7 @@ export const useUpdateNamespace = <
       { namespaceId: number; data: NonReadonly<UpdateNamespaceReq> },
       TContext
     >;
-    axios?: AxiosRequestConfig;
+    request?: SecondParameter<typeof request>;
   },
   queryClient?: QueryClient,
 ): UseMutationResult<
@@ -604,10 +611,15 @@ export const useUpdateNamespace = <
  */
 export const listNamespaceAccessKeys = (
   namespaceId: number,
-  options?: AxiosRequestConfig,
-): Promise<AxiosResponse<Response>> => {
-  return axios.default.get(
-    `/api/v1/admin/namespaces/${namespaceId}/access-keys`,
+  options?: SecondParameter<typeof request>,
+  signal?: AbortSignal,
+) => {
+  return request<Response>(
+    {
+      url: `/api/v1/admin/namespaces/${namespaceId}/access-keys`,
+      method: "GET",
+      signal,
+    },
     options,
   );
 };
@@ -618,7 +630,7 @@ export const getListNamespaceAccessKeysQueryKey = (namespaceId?: number) => {
 
 export const getListNamespaceAccessKeysQueryOptions = <
   TData = Awaited<ReturnType<typeof listNamespaceAccessKeys>>,
-  TError = AxiosError<ErrorModel>,
+  TError = ErrorModel,
 >(
   namespaceId: number,
   options?: {
@@ -629,10 +641,10 @@ export const getListNamespaceAccessKeysQueryOptions = <
         TData
       >
     >;
-    axios?: AxiosRequestConfig;
+    request?: SecondParameter<typeof request>;
   },
 ) => {
-  const { query: queryOptions, axios: axiosOptions } = options ?? {};
+  const { query: queryOptions, request: requestOptions } = options ?? {};
 
   const queryKey =
     queryOptions?.queryKey ?? getListNamespaceAccessKeysQueryKey(namespaceId);
@@ -640,7 +652,7 @@ export const getListNamespaceAccessKeysQueryOptions = <
   const queryFn: QueryFunction<
     Awaited<ReturnType<typeof listNamespaceAccessKeys>>
   > = ({ signal }) =>
-    listNamespaceAccessKeys(namespaceId, { signal, ...axiosOptions });
+    listNamespaceAccessKeys(namespaceId, requestOptions, signal);
 
   return {
     queryKey,
@@ -657,11 +669,11 @@ export const getListNamespaceAccessKeysQueryOptions = <
 export type ListNamespaceAccessKeysQueryResult = NonNullable<
   Awaited<ReturnType<typeof listNamespaceAccessKeys>>
 >;
-export type ListNamespaceAccessKeysQueryError = AxiosError<ErrorModel>;
+export type ListNamespaceAccessKeysQueryError = ErrorModel;
 
 export function useListNamespaceAccessKeys<
   TData = Awaited<ReturnType<typeof listNamespaceAccessKeys>>,
-  TError = AxiosError<ErrorModel>,
+  TError = ErrorModel,
 >(
   namespaceId: number,
   options: {
@@ -680,7 +692,7 @@ export function useListNamespaceAccessKeys<
         >,
         "initialData"
       >;
-    axios?: AxiosRequestConfig;
+    request?: SecondParameter<typeof request>;
   },
   queryClient?: QueryClient,
 ): DefinedUseQueryResult<TData, TError> & {
@@ -688,7 +700,7 @@ export function useListNamespaceAccessKeys<
 };
 export function useListNamespaceAccessKeys<
   TData = Awaited<ReturnType<typeof listNamespaceAccessKeys>>,
-  TError = AxiosError<ErrorModel>,
+  TError = ErrorModel,
 >(
   namespaceId: number,
   options?: {
@@ -707,7 +719,7 @@ export function useListNamespaceAccessKeys<
         >,
         "initialData"
       >;
-    axios?: AxiosRequestConfig;
+    request?: SecondParameter<typeof request>;
   },
   queryClient?: QueryClient,
 ): UseQueryResult<TData, TError> & {
@@ -715,7 +727,7 @@ export function useListNamespaceAccessKeys<
 };
 export function useListNamespaceAccessKeys<
   TData = Awaited<ReturnType<typeof listNamespaceAccessKeys>>,
-  TError = AxiosError<ErrorModel>,
+  TError = ErrorModel,
 >(
   namespaceId: number,
   options?: {
@@ -726,7 +738,7 @@ export function useListNamespaceAccessKeys<
         TData
       >
     >;
-    axios?: AxiosRequestConfig;
+    request?: SecondParameter<typeof request>;
   },
   queryClient?: QueryClient,
 ): UseQueryResult<TData, TError> & {
@@ -738,7 +750,7 @@ export function useListNamespaceAccessKeys<
 
 export function useListNamespaceAccessKeys<
   TData = Awaited<ReturnType<typeof listNamespaceAccessKeys>>,
-  TError = AxiosError<ErrorModel>,
+  TError = ErrorModel,
 >(
   namespaceId: number,
   options?: {
@@ -749,7 +761,7 @@ export function useListNamespaceAccessKeys<
         TData
       >
     >;
-    axios?: AxiosRequestConfig;
+    request?: SecondParameter<typeof request>;
   },
   queryClient?: QueryClient,
 ): UseQueryResult<TData, TError> & {

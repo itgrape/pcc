@@ -1,18 +1,19 @@
 import { useState } from "react"
-import { Link, useLocation, Outlet } from "react-router-dom"
-import { cn } from "@/lib/utils"
-import { Button } from "@/components/ui/button"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import {
-  LayoutDashboard,
-  FolderKanban,
-  Key,
-  LogOut,
   ChevronLeft,
   ChevronRight,
+  FolderKanban,
+  Key,
+  LayoutDashboard,
+  LogOut,
 } from "lucide-react"
-import { useAuthStore } from "@/stores/auth"
+import { Link, Outlet, useLocation } from "react-router-dom"
+
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
+import { useAuthStore } from "@/features/auth/store"
+import { cn } from "@/lib/utils"
 
 const navItems = [
   { icon: LayoutDashboard, label: "仪表盘", path: "/" },
@@ -29,8 +30,8 @@ export default function AppLayout() {
     <div className="flex h-screen overflow-hidden bg-muted/30">
       <aside
         className={cn(
-          "flex flex-col border-r bg-sidebar text-sidebar-foreground transition-all duration-300",
-          collapsed ? "w-16" : "w-60"
+          "relative flex flex-col border-r bg-sidebar text-sidebar-foreground transition-all duration-300",
+          collapsed ? "w-16" : "w-60",
         )}
       >
         <div className="flex h-14 items-center gap-2 border-b border-sidebar-ring px-4">
@@ -42,14 +43,19 @@ export default function AppLayout() {
 
         <nav className="flex-1 space-y-1 p-3">
           {navItems.map((item) => {
-            const active = item.path === "/" ? location.pathname === "/" : location.pathname.startsWith(item.path)
+            const active =
+              item.path === "/"
+                ? location.pathname === "/"
+                : location.pathname.startsWith(item.path)
             return (
               <Link
                 key={item.path}
                 to={item.path}
                 className={cn(
                   "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
-                  active ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                  active
+                    ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                    : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
                 )}
               >
                 <item.icon className="h-4 w-4 shrink-0" />
@@ -62,19 +68,33 @@ export default function AppLayout() {
         <Separator className="bg-sidebar-ring" />
 
         <div className="p-3">
-          <div className={cn("flex items-center gap-3 rounded-lg px-3 py-2", collapsed && "justify-center")}>
+          <div
+            className={cn(
+              "flex items-center gap-3 rounded-lg px-3 py-2",
+              collapsed && "justify-center",
+            )}
+          >
             <Avatar className="h-8 w-8">
               <AvatarFallback className="bg-sidebar-accent text-sidebar-accent-foreground text-xs">
                 {(user?.displayName || user?.name)?.charAt(0).toUpperCase() || "U"}
               </AvatarFallback>
             </Avatar>
-            {!collapsed && <div className="flex-1 min-w-0"><p className="text-sm font-medium truncate">{user?.displayName || user?.name || "用户"}</p></div>}
+            {!collapsed && (
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium truncate">
+                  {user?.displayName || user?.name || "用户"}
+                </p>
+              </div>
+            )}
           </div>
 
           <Button
             variant="ghost"
             size="sm"
-            className={cn("mt-1 w-full justify-start text-sidebar-foreground/70 hover:text-sidebar-accent-foreground", collapsed && "justify-center px-2")}
+            className={cn(
+              "mt-1 w-full justify-start text-sidebar-foreground/70 hover:text-sidebar-accent-foreground",
+              collapsed && "justify-center px-2",
+            )}
             onClick={logout}
           >
             <LogOut className="h-4 w-4 shrink-0" />
@@ -83,10 +103,16 @@ export default function AppLayout() {
         </div>
 
         <button
-          onClick={() => setCollapsed(!collapsed)}
+          type="button"
+          aria-label={collapsed ? "展开侧边栏" : "收起侧边栏"}
+          onClick={() => setCollapsed((value) => !value)}
           className="absolute -right-3 top-20 flex h-6 w-6 items-center justify-center rounded-full border bg-background shadow-sm hover:bg-accent"
         >
-          {collapsed ? <ChevronRight className="h-3 w-3" /> : <ChevronLeft className="h-3 w-3" />}
+          {collapsed ? (
+            <ChevronRight className="h-3 w-3" />
+          ) : (
+            <ChevronLeft className="h-3 w-3" />
+          )}
         </button>
       </aside>
 

@@ -1,7 +1,8 @@
 import { useEffect, useRef } from "react"
-import { useNavigate } from "react-router-dom"
-import { useAuthStore } from "@/stores/auth"
 import { Loader2 } from "lucide-react"
+import { useNavigate } from "react-router-dom"
+
+import { useAuthStore } from "./store"
 
 export default function CallbackPage() {
   const navigate = useNavigate()
@@ -14,8 +15,9 @@ export default function CallbackPage() {
     }
     started.current = true
 
-    const code = new URLSearchParams(window.location.search).get("code")
-    const state = new URLSearchParams(window.location.search).get("state")
+    const params = new URLSearchParams(window.location.search)
+    const code = params.get("code")
+    const state = params.get("state")
     const storedState = sessionStorage.getItem("casdoor_oauth_state")
     if (!code || !state || !storedState) {
       logout()
@@ -30,12 +32,10 @@ export default function CallbackPage() {
       return
     }
 
-    handleCallback(code, state)
-      .then(() => {
-        navigate("/", { replace: true })
-      })
-      .catch((err) => {
-        console.error("Login callback failed:", err)
+    void handleCallback(code, state)
+      .then(() => navigate("/", { replace: true }))
+      .catch((error) => {
+        console.error("Login callback failed:", error)
         navigate("/login", { replace: true })
       })
   }, [navigate, handleCallback, logout])

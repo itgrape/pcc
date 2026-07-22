@@ -40,18 +40,18 @@ func (e *Error) Wrap(err error) *Error {
 }
 
 var (
-	ErrNamespaceNotFound   = &Error{Kind: KindNotFound, Message: "namespace not found"}
-	ErrConfigNotFound      = &Error{Kind: KindNotFound, Message: "config not found"}
-	ErrHistoryNotFound     = &Error{Kind: KindNotFound, Message: "config history not found"}
-	ErrAccessKeyNotFound   = &Error{Kind: KindNotFound, Message: "access key not found"}
-	ErrPermissionNotFound  = &Error{Kind: KindNotFound, Message: "permission not found"}
-	ErrConflict            = &Error{Kind: KindConflict, Message: "optimistic lock conflict"}
-	ErrDuplicate           = &Error{Kind: KindConflict, Message: "duplicate entry"}
-	ErrUnauthenticated     = &Error{Kind: KindUnauthed, Message: "unauthenticated"}
-	ErrForbidden           = &Error{Kind: KindForbidden, Message: "forbidden"}
-	ErrInternal            = &Error{Kind: KindInternal, Message: "internal error"}
-	ErrValidation          = &Error{Kind: KindValidation, Message: "validation error"}
-	ErrNamespaceNotEmpty   = &Error{Kind: KindConflict, Message: "namespace is not empty, delete its configs and permissions first"}
+	ErrNamespaceNotFound  = &Error{Kind: KindNotFound, Message: "namespace not found"}
+	ErrConfigNotFound     = &Error{Kind: KindNotFound, Message: "config not found"}
+	ErrHistoryNotFound    = &Error{Kind: KindNotFound, Message: "config history not found"}
+	ErrAccessKeyNotFound  = &Error{Kind: KindNotFound, Message: "access key not found"}
+	ErrPermissionNotFound = &Error{Kind: KindNotFound, Message: "permission not found"}
+	ErrConflict           = &Error{Kind: KindConflict, Message: "optimistic lock conflict"}
+	ErrDuplicate          = &Error{Kind: KindConflict, Message: "duplicate entry"}
+	ErrUnauthenticated    = &Error{Kind: KindUnauthed, Message: "unauthenticated"}
+	ErrForbidden          = &Error{Kind: KindForbidden, Message: "forbidden"}
+	ErrInternal           = &Error{Kind: KindInternal, Message: "internal error"}
+	ErrValidation         = &Error{Kind: KindValidation, Message: "validation error"}
+	ErrNamespaceNotEmpty  = &Error{Kind: KindConflict, Message: "namespace is not empty, delete its configs and permissions first"}
 )
 
 // MapError 将仓储错误转为领域错误。
@@ -68,9 +68,13 @@ func MapError(err error) error {
 
 // Identity 经过认证的用户身份。
 type Identity struct {
-	Username string
-	Role     string
-	Email    string
-	Name     string
-	Avatar   string
+	Owner       string
+	Username    string
+	DisplayName string
+	Email       string
+	Phone       string
+	Avatar      string
+	Roles       []string
+	Groups      []string
+	Properties  map[string]string
 }

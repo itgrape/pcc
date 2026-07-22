@@ -2,7 +2,9 @@ package httpapi
 
 import (
 	"context"
+	"net/http"
 
+	"github.com/danielgtaylor/huma/v2"
 	"github.com/itgrape/pcc/server/internal/domain"
 	"github.com/itgrape/pcc/server/internal/model"
 	"github.com/itgrape/pcc/server/pkg/convert"
@@ -10,6 +12,41 @@ import (
 )
 
 // ---- 配置列表 ----
+
+func (h *handlers) registerConfigRoutes(api huma.API) {
+	huma.Register(api, huma.Operation{
+		OperationID: "list-configs", Method: http.MethodGet, Path: adminBasePath + "/namespaces/{namespace_id}/configs",
+		Summary: "配置列表", Tags: []string{"configs"},
+	}, h.listConfigs)
+	huma.Register(api, huma.Operation{
+		OperationID: "get-config", Method: http.MethodGet, Path: adminBasePath + "/configs/{config_id}",
+		Summary: "配置详情", Tags: []string{"configs"},
+	}, h.getConfig)
+	huma.Register(api, huma.Operation{
+		OperationID: "create-config", Method: http.MethodPost, Path: adminBasePath + "/namespaces/{namespace_id}/configs",
+		Summary: "创建配置", Tags: []string{"configs"}, DefaultStatus: http.StatusCreated,
+	}, h.createConfig)
+	huma.Register(api, huma.Operation{
+		OperationID: "update-config", Method: http.MethodPut, Path: adminBasePath + "/configs/{config_id}",
+		Summary: "更新配置", Tags: []string{"configs"},
+	}, h.updateConfig)
+	huma.Register(api, huma.Operation{
+		OperationID: "delete-config", Method: http.MethodDelete, Path: adminBasePath + "/configs/{config_id}",
+		Summary: "删除配置", Tags: []string{"configs"},
+	}, h.deleteConfig)
+	huma.Register(api, huma.Operation{
+		OperationID: "list-config-history", Method: http.MethodGet, Path: adminBasePath + "/configs/{config_id}/history",
+		Summary: "配置历史版本列表", Tags: []string{"configs"},
+	}, h.listConfigHistory)
+	huma.Register(api, huma.Operation{
+		OperationID: "get-config-history", Method: http.MethodGet, Path: adminBasePath + "/config/history/{history_id}",
+		Summary: "历史版本详情", Tags: []string{"configs"},
+	}, h.getConfigHistory)
+	huma.Register(api, huma.Operation{
+		OperationID: "rollback-config", Method: http.MethodPost, Path: adminBasePath + "/configs/{config_id}/rollback/{history_id}",
+		Summary: "回滚配置", Tags: []string{"configs"},
+	}, h.rollbackConfig)
+}
 
 type ConfigListInput struct {
 	NamespaceID uint64 `path:"namespace_id"`

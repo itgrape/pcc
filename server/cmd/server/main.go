@@ -57,19 +57,24 @@ func run() error {
 	cfgUsecase := app.NewConfigUsecase(store, bus)
 	akUsecase := app.NewAccessKeyUsecase(store)
 
-	r := httpapi.New(httpapi.Deps{
+	r, err := httpapi.New(httpapi.Deps{
 		Namespaces: nsUsecase,
 		Configs:    cfgUsecase,
 		AccessKeys: akUsecase,
-		Bus:        bus,
-		Store:      store,
 		Auth:       auth,
 	})
+	if err != nil {
+		return err
+	}
 
 	srv := &http.Server{
 		Addr:              cfg.Server.Addr,
 		Handler:           r,
 		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       60 * time.Second,
+		MaxHeaderBytes:    1 << 20,
 	}
 
 	errCh := make(chan error, 1)

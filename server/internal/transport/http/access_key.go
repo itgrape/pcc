@@ -2,7 +2,9 @@ package httpapi
 
 import (
 	"context"
+	"net/http"
 
+	"github.com/danielgtaylor/huma/v2"
 	"github.com/itgrape/pcc/server/internal/domain"
 	"github.com/itgrape/pcc/server/internal/model"
 	"github.com/itgrape/pcc/server/pkg/convert"
@@ -10,6 +12,49 @@ import (
 )
 
 // ---- 密钥列表 ----
+
+func (h *handlers) registerAccessKeyRoutes(api huma.API) {
+	huma.Register(api, huma.Operation{
+		OperationID: "list-access-keys", Method: http.MethodGet, Path: adminBasePath + "/access-keys",
+		Summary: "密钥列表", Tags: []string{"access-keys"},
+	}, h.listAccessKeys)
+	huma.Register(api, huma.Operation{
+		OperationID: "get-access-key", Method: http.MethodGet, Path: adminBasePath + "/access-keys/{key_id}",
+		Summary: "密钥详情", Tags: []string{"access-keys"},
+	}, h.getAccessKey)
+	huma.Register(api, huma.Operation{
+		OperationID: "create-access-key", Method: http.MethodPost, Path: adminBasePath + "/access-keys",
+		Summary: "创建密钥", Tags: []string{"access-keys"}, DefaultStatus: http.StatusCreated,
+	}, h.createAccessKey)
+	huma.Register(api, huma.Operation{
+		OperationID: "update-access-key", Method: http.MethodPut, Path: adminBasePath + "/access-keys/{key_id}",
+		Summary: "更新密钥", Tags: []string{"access-keys"},
+	}, h.updateAccessKey)
+	huma.Register(api, huma.Operation{
+		OperationID: "delete-access-key", Method: http.MethodDelete, Path: adminBasePath + "/access-keys/{key_id}",
+		Summary: "删除密钥", Tags: []string{"access-keys"},
+	}, h.deleteAccessKey)
+	huma.Register(api, huma.Operation{
+		OperationID: "list-key-namespaces", Method: http.MethodGet, Path: adminBasePath + "/access-keys/{key_id}/namespaces",
+		Summary: "密钥已授权的命名空间", Tags: []string{"access-keys"},
+	}, h.listKeyNamespaces)
+	huma.Register(api, huma.Operation{
+		OperationID: "grant-key-namespace", Method: http.MethodPost, Path: adminBasePath + "/access-keys/{key_id}/namespaces",
+		Summary: "新增授权", Tags: []string{"access-keys"}, DefaultStatus: http.StatusCreated,
+	}, h.grantKeyNamespace)
+	huma.Register(api, huma.Operation{
+		OperationID: "update-key-namespace-permission", Method: http.MethodPut, Path: adminBasePath + "/access-keys/{key_id}/namespaces/{namespace_id}",
+		Summary: "更新授权", Tags: []string{"access-keys"},
+	}, h.updateKeyNamespacePermission)
+	huma.Register(api, huma.Operation{
+		OperationID: "revoke-key-namespace", Method: http.MethodDelete, Path: adminBasePath + "/access-keys/{key_id}/namespaces/{namespace_id}",
+		Summary: "解除授权", Tags: []string{"access-keys"},
+	}, h.revokeKeyNamespace)
+	huma.Register(api, huma.Operation{
+		OperationID: "list-namespace-access-keys", Method: http.MethodGet, Path: adminBasePath + "/namespaces/{namespace_id}/access-keys",
+		Summary: "命名空间下的授权密钥", Tags: []string{"namespaces"},
+	}, h.listNamespaceAccessKeys)
+}
 
 type AccessKeyListInput struct {
 	Page     int    `query:"page" default:"1" minimum:"1"`
@@ -164,7 +209,7 @@ type NamespaceAccessKeysInput struct {
 }
 
 func (h *handlers) listNamespaceAccessKeys(ctx context.Context, in *NamespaceAccessKeysInput) (*KeyNamespaceListOutput, error) {
-	list, err := h.deps.Store.AccessKeyNamespace.ListByNamespaceID(ctx, in.NamespaceID)
+	list, err := h.deps.AccessKeys.ListByNamespace(ctx, in.NamespaceID)
 	if err != nil {
 		return nil, toHTTPError(err)
 	}

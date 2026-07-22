@@ -2,13 +2,38 @@ package httpapi
 
 import (
 	"context"
+	"net/http"
 
+	"github.com/danielgtaylor/huma/v2"
 	"github.com/itgrape/pcc/server/internal/domain"
 	"github.com/itgrape/pcc/server/pkg/convert"
 	"github.com/itgrape/pcc/server/pkg/types"
 )
 
 // ---- 命名空间 ----
+
+func (h *handlers) registerNamespaceRoutes(api huma.API) {
+	huma.Register(api, huma.Operation{
+		OperationID: "list-namespaces", Method: http.MethodGet, Path: adminBasePath + "/namespaces",
+		Summary: "命名空间列表", Tags: []string{"namespaces"},
+	}, h.listNamespaces)
+	huma.Register(api, huma.Operation{
+		OperationID: "get-namespace", Method: http.MethodGet, Path: adminBasePath + "/namespaces/{namespace_id}",
+		Summary: "命名空间详情", Tags: []string{"namespaces"},
+	}, h.getNamespace)
+	huma.Register(api, huma.Operation{
+		OperationID: "create-namespace", Method: http.MethodPost, Path: adminBasePath + "/namespaces",
+		Summary: "创建命名空间", Tags: []string{"namespaces"}, DefaultStatus: http.StatusCreated,
+	}, h.createNamespace)
+	huma.Register(api, huma.Operation{
+		OperationID: "update-namespace", Method: http.MethodPut, Path: adminBasePath + "/namespaces/{namespace_id}",
+		Summary: "更新命名空间", Tags: []string{"namespaces"},
+	}, h.updateNamespace)
+	huma.Register(api, huma.Operation{
+		OperationID: "delete-namespace", Method: http.MethodDelete, Path: adminBasePath + "/namespaces/{namespace_id}",
+		Summary: "删除命名空间", Tags: []string{"namespaces"},
+	}, h.deleteNamespace)
+}
 
 type NamespaceListInput struct {
 	Page     int    `query:"page" default:"1" minimum:"1"`

@@ -17,18 +17,23 @@ import type {
   UseQueryResult,
 } from "@tanstack/react-query";
 
-import * as axios from "axios";
-import type { AxiosError, AxiosRequestConfig, AxiosResponse } from "axios";
-
 import type { ErrorModel, Response } from ".././schemas";
+
+import { request } from "../../../shared/api/http";
+
+type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 /**
  * @summary 系统枚举值
  */
 export const getSystemEnums = (
-  options?: AxiosRequestConfig,
-): Promise<AxiosResponse<Response>> => {
-  return axios.default.get(`/api/v1/admin/system/enums`, options);
+  options?: SecondParameter<typeof request>,
+  signal?: AbortSignal,
+) => {
+  return request<Response>(
+    { url: `/api/v1/admin/system/enums`, method: "GET", signal },
+    options,
+  );
 };
 
 export const getGetSystemEnumsQueryKey = () => {
@@ -37,20 +42,20 @@ export const getGetSystemEnumsQueryKey = () => {
 
 export const getGetSystemEnumsQueryOptions = <
   TData = Awaited<ReturnType<typeof getSystemEnums>>,
-  TError = AxiosError<ErrorModel>,
+  TError = ErrorModel,
 >(options?: {
   query?: Partial<
     UseQueryOptions<Awaited<ReturnType<typeof getSystemEnums>>, TError, TData>
   >;
-  axios?: AxiosRequestConfig;
+  request?: SecondParameter<typeof request>;
 }) => {
-  const { query: queryOptions, axios: axiosOptions } = options ?? {};
+  const { query: queryOptions, request: requestOptions } = options ?? {};
 
   const queryKey = queryOptions?.queryKey ?? getGetSystemEnumsQueryKey();
 
   const queryFn: QueryFunction<Awaited<ReturnType<typeof getSystemEnums>>> = ({
     signal,
-  }) => getSystemEnums({ signal, ...axiosOptions });
+  }) => getSystemEnums(requestOptions, signal);
 
   return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
     Awaited<ReturnType<typeof getSystemEnums>>,
@@ -62,11 +67,11 @@ export const getGetSystemEnumsQueryOptions = <
 export type GetSystemEnumsQueryResult = NonNullable<
   Awaited<ReturnType<typeof getSystemEnums>>
 >;
-export type GetSystemEnumsQueryError = AxiosError<ErrorModel>;
+export type GetSystemEnumsQueryError = ErrorModel;
 
 export function useGetSystemEnums<
   TData = Awaited<ReturnType<typeof getSystemEnums>>,
-  TError = AxiosError<ErrorModel>,
+  TError = ErrorModel,
 >(
   options: {
     query: Partial<
@@ -80,7 +85,7 @@ export function useGetSystemEnums<
         >,
         "initialData"
       >;
-    axios?: AxiosRequestConfig;
+    request?: SecondParameter<typeof request>;
   },
   queryClient?: QueryClient,
 ): DefinedUseQueryResult<TData, TError> & {
@@ -88,7 +93,7 @@ export function useGetSystemEnums<
 };
 export function useGetSystemEnums<
   TData = Awaited<ReturnType<typeof getSystemEnums>>,
-  TError = AxiosError<ErrorModel>,
+  TError = ErrorModel,
 >(
   options?: {
     query?: Partial<
@@ -102,7 +107,7 @@ export function useGetSystemEnums<
         >,
         "initialData"
       >;
-    axios?: AxiosRequestConfig;
+    request?: SecondParameter<typeof request>;
   },
   queryClient?: QueryClient,
 ): UseQueryResult<TData, TError> & {
@@ -110,13 +115,13 @@ export function useGetSystemEnums<
 };
 export function useGetSystemEnums<
   TData = Awaited<ReturnType<typeof getSystemEnums>>,
-  TError = AxiosError<ErrorModel>,
+  TError = ErrorModel,
 >(
   options?: {
     query?: Partial<
       UseQueryOptions<Awaited<ReturnType<typeof getSystemEnums>>, TError, TData>
     >;
-    axios?: AxiosRequestConfig;
+    request?: SecondParameter<typeof request>;
   },
   queryClient?: QueryClient,
 ): UseQueryResult<TData, TError> & {
@@ -128,13 +133,13 @@ export function useGetSystemEnums<
 
 export function useGetSystemEnums<
   TData = Awaited<ReturnType<typeof getSystemEnums>>,
-  TError = AxiosError<ErrorModel>,
+  TError = ErrorModel,
 >(
   options?: {
     query?: Partial<
       UseQueryOptions<Awaited<ReturnType<typeof getSystemEnums>>, TError, TData>
     >;
-    axios?: AxiosRequestConfig;
+    request?: SecondParameter<typeof request>;
   },
   queryClient?: QueryClient,
 ): UseQueryResult<TData, TError> & {
