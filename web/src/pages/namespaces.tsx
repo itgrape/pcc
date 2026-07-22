@@ -8,7 +8,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
   DialogFooter, DialogTrigger,
 } from "@/components/ui/dialog"
-import { Plus, Search, Pencil, Trash2, ExternalLink } from "lucide-react"
+import { Plus, Search, Pencil, Trash2, ArrowUpRight, Boxes } from "lucide-react"
 import { Link } from "react-router-dom"
 import {
   useListNamespaces,
@@ -58,15 +58,19 @@ export default function NamespacesPage() {
   const total = nsData?.data?.total ?? 0
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-7">
+      <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">命名空间</h1>
-          <p className="text-muted-foreground">管理配置分组和权限边界</p>
+          <div className="mb-3 inline-flex items-center gap-2 rounded-full border bg-card/70 px-3 py-1 text-xs font-medium text-muted-foreground shadow-sm">
+            <Boxes className="h-3.5 w-3.5 text-primary" />
+            Resource Isolation
+          </div>
+          <h1 className="text-3xl font-semibold tracking-tight">命名空间</h1>
+          <p className="mt-2 text-sm text-muted-foreground">按业务、团队或环境组织配置与权限边界</p>
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
-            <Button>
+            <Button className="rounded-xl shadow-lg shadow-primary/20">
               <Plus className="h-4 w-4" />
               新建命名空间
             </Button>
@@ -112,25 +116,26 @@ export default function NamespacesPage() {
         </Dialog>
       </div>
 
-      <div className="flex items-center gap-2">
-        <div className="relative flex-1 max-w-sm">
+      <div className="flex flex-col gap-3 rounded-2xl border bg-card/65 p-3 shadow-sm backdrop-blur sm:flex-row sm:items-center">
+        <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             placeholder="搜索命名空间..."
-            className="pl-9"
+            className="h-10 border-0 bg-transparent pl-9 shadow-none focus-visible:ring-0"
             value={keyword}
             onChange={(e) => setKeyword(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter") { setSearch(keyword); setPage(1) } }}
           />
         </div>
-        <Button variant="secondary" size="sm" onClick={() => { setSearch(keyword); setPage(1) }}>搜索</Button>
+        <Button variant="secondary" className="rounded-xl" onClick={() => { setSearch(keyword); setPage(1) }}>搜索</Button>
       </div>
 
-      <Card>
+      <Card className="overflow-hidden border-border/60 bg-card/80 shadow-sm backdrop-blur">
         <CardContent className="p-0">
-          <table className="w-full">
+          <div className="overflow-x-auto">
+          <table className="w-full min-w-[760px]">
             <thead>
-              <tr className="border-b text-sm text-muted-foreground">
+              <tr className="border-b bg-muted/35 text-xs uppercase tracking-wide text-muted-foreground">
                 <th className="text-left font-medium px-6 py-3">ID</th>
                 <th className="text-left font-medium px-6 py-3">名称</th>
                 <th className="text-left font-medium px-6 py-3">描述</th>
@@ -145,12 +150,15 @@ export default function NamespacesPage() {
                 <tr><td colSpan={5} className="px-6 py-12 text-center text-muted-foreground">暂无数据</td></tr>
               ) : (
                 list.map((ns: Namespace) => (
-                  <tr key={ns.id} className="border-b last:border-0 hover:bg-muted/50">
-                    <td className="px-6 py-3 text-sm text-muted-foreground">{ns.id}</td>
-                    <td className="px-6 py-3">
-                      <Link to={`/namespaces/${ns.id}/configs`} className="font-medium hover:text-primary flex items-center gap-1">
+                  <tr key={ns.id} className="group border-b transition last:border-0 hover:bg-muted/35">
+                    <td className="px-6 py-4 font-mono text-xs text-muted-foreground">#{ns.id}</td>
+                    <td className="px-6 py-4">
+                      <Link to={`/namespaces/${ns.id}/configs`} className="flex items-center gap-3 font-medium hover:text-primary">
+                        <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/8 text-primary">
+                          <Boxes className="h-4 w-4" />
+                        </span>
                         {ns.namespace}
-                        <ExternalLink className="h-3 w-3" />
+                        <ArrowUpRight className="h-3.5 w-3.5 opacity-0 transition group-hover:opacity-100" />
                       </Link>
                     </td>
                     <td className="px-6 py-3 text-sm text-muted-foreground">{ns.description || "-"}</td>
@@ -173,11 +181,12 @@ export default function NamespacesPage() {
               )}
             </tbody>
           </table>
+          </div>
         </CardContent>
       </Card>
 
       <div className="flex items-center justify-between text-sm text-muted-foreground">
-        <span>共 {total} 条</span>
+        <span>共 <strong className="font-medium text-foreground">{total}</strong> 个命名空间</span>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(page - 1)}>上一页</Button>
           <Button variant="outline" size="sm" disabled={page * 20 >= total} onClick={() => setPage(page + 1)}>下一页</Button>

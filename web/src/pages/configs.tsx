@@ -1,10 +1,9 @@
-import { useState } from "react"
+import { lazy, Suspense, useState } from "react"
 import { useParams, Link } from "react-router-dom"
 import { useQueryClient } from "@tanstack/react-query"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent } from "@/components/ui/card"
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
@@ -25,6 +24,21 @@ import {
   getListConfigsQueryKey,
 } from "@/lib/orval/configs/configs"
 import { useGetNamespace } from "@/lib/orval/namespaces/namespaces"
+
+const ConfigEditor = lazy(() =>
+  import("@/features/configs/config-editor").then((module) => ({
+    default: module.ConfigEditor,
+  })),
+)
+
+function EditorFallback() {
+  return (
+    <div className="flex h-[360px] items-center justify-center rounded-2xl border bg-muted/30 text-sm text-muted-foreground">
+      <span className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+      正在加载配置编辑器…
+    </div>
+  )
+}
 
 interface ConfigItem {
   id: string
@@ -76,6 +90,8 @@ export default function ConfigsPage() {
   const [form, setForm] = useState({ config_name: "", format: "1", content: "", description: "" })
   const [editForm, setEditForm] = useState({ content: "", description: "", change_reason: "" })
   const [rollbackReason, setRollbackReason] = useState("")
+  const [formValid, setFormValid] = useState(true)
+  const [editFormValid, setEditFormValid] = useState(true)
 
   const { data: nsRes } = useGetNamespace(nsId)
   const { data: configsRes, isLoading } = useListConfigs(nsId)
@@ -93,24 +109,24 @@ export default function ConfigsPage() {
   const historyList = (historyRes?.data as unknown as { data?: ConfigHistoryItem[] })?.data ?? []
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-7">
+      <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
         <div>
-          <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
-            <Link to="/namespaces" className="hover:text-foreground">命名空间</Link>
+          <div className="mb-3 flex items-center gap-2 text-xs font-medium text-muted-foreground">
+            <Link to="/namespaces" className="rounded-lg px-2 py-1 transition hover:bg-muted hover:text-foreground">命名空间</Link>
             <span>/</span>
-            <span className="text-foreground font-medium">{namespaceName}</span>
+            <span className="rounded-lg bg-primary/8 px-2 py-1 text-primary">{namespaceName}</span>
           </div>
-          <h1 className="text-2xl font-bold tracking-tight">配置列表</h1>
-          <p className="text-muted-foreground">管理 {namespaceName} 下的配置项</p>
+          <h1 className="text-3xl font-semibold tracking-tight">配置管理</h1>
+          <p className="mt-2 text-sm text-muted-foreground">编辑、校验并追踪 {namespaceName} 下的所有配置</p>
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
-            <Button>
+            <Button className="rounded-xl shadow-lg shadow-primary/20">
               <Plus className="h-4 w-4" />新建配置
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-xl">
+          <DialogContent className="max-w-5xl">
             <DialogHeader>
               <DialogTitle>新建配置</DialogTitle>
               <DialogDescription>在 {namespaceName} 下创建新配置</DialogDescription>
@@ -140,7 +156,14 @@ export default function ConfigsPage() {
               </div>
               <div className="space-y-2">
                 <Label>配置内容</Label>
-                <Textarea className="min-h-[200px] font-mono text-sm" value={form.content} onChange={(e) => setForm({ ...form, content: e.target.value })} placeholder="输入配置内容..." />
+                <Suspense fallback={<EditorFallback />}>
+                  <ConfigEditor
+                    value={form.content}
+                    onChange={(content) => setForm({ ...form, content })}
+                    format={Number(form.format)}
+                    onValidityChange={setFormValid}
+                  />
+                </Suspense>
               </div>
             </div>
             <DialogFooter>
@@ -148,17 +171,18 @@ export default function ConfigsPage() {
               <Button onClick={() => createMutate(
                 { namespaceId: nsId, data: { config_name: form.config_name, format: parseInt(form.format), content: form.content, description: form.description || undefined } },
                 { onSuccess: () => { invalidate(); setOpen(false); setForm({ config_name: "", format: "1", content: "", description: "" }) } },
-              )} disabled={!form.config_name || !form.content}>创建</Button>
+              )} disabled={!form.config_name || !form.content || !formValid}>创建</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
       </div>
 
-      <Card>
+      <Card className="overflow-hidden border-border/60 bg-card/80 shadow-sm backdrop-blur">
         <CardContent className="p-0">
-          <table className="w-full">
+          <div className="overflow-x-auto">
+          <table className="w-full min-w-[900px]">
             <thead>
-              <tr className="border-b text-sm text-muted-foreground">
+              <tr className="border-b bg-muted/35 text-xs uppercase tracking-wide text-muted-foreground">
                 <th className="text-left font-medium px-6 py-3">名称</th>
                 <th className="text-left font-medium px-6 py-3">格式</th>
                 <th className="text-left font-medium px-6 py-3">版本</th>
@@ -175,8 +199,15 @@ export default function ConfigsPage() {
                 <tr><td colSpan={7} className="px-6 py-12 text-center text-muted-foreground">暂无配置</td></tr>
               ) : (
                 configs.map((cfg: ConfigItem) => (
-                  <tr key={cfg.id} className="border-b last:border-0 hover:bg-muted/50">
-                    <td className="px-6 py-3 font-medium">{cfg.config_name}</td>
+                  <tr key={cfg.id} className="group border-b transition last:border-0 hover:bg-muted/35">
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-3">
+                        <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/8 font-mono text-xs font-semibold text-primary">
+                          {"{ }"}
+                        </span>
+                        <span className="font-medium">{cfg.config_name}</span>
+                      </div>
+                    </td>
                     <td className="px-6 py-3">
                       <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium ${formatColors[cfg.format] || ""}`}>
                         {formatLabels[cfg.format] || "未知"}
@@ -204,11 +235,12 @@ export default function ConfigsPage() {
               )}
             </tbody>
           </table>
+          </div>
         </CardContent>
       </Card>
 
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent className="max-w-xl">
+        <DialogContent className="max-w-5xl">
           <DialogHeader>
             <DialogTitle>编辑配置</DialogTitle>
             <DialogDescription>{editConfig?.config_name} (v{editConfig?.version})</DialogDescription>
@@ -220,7 +252,14 @@ export default function ConfigsPage() {
             </div>
             <div className="space-y-2">
               <Label>配置内容</Label>
-              <Textarea className="min-h-[200px] font-mono text-sm" value={editForm.content} onChange={(e) => setEditForm({ ...editForm, content: e.target.value })} />
+              <Suspense fallback={<EditorFallback />}>
+                <ConfigEditor
+                  value={editForm.content}
+                  onChange={(content) => setEditForm({ ...editForm, content })}
+                  format={editConfig?.format ?? 3}
+                  onValidityChange={setEditFormValid}
+                />
+              </Suspense>
             </div>
             <div className="space-y-2">
               <Label>变更原因</Label>
@@ -232,7 +271,7 @@ export default function ConfigsPage() {
             <Button onClick={() => updateMutate(
               { configId: Number(editConfig!.id), data: editForm },
               { onSuccess: () => { invalidate(); setEditOpen(false) } },
-            )}>保存</Button>
+            )} disabled={!editFormValid}>保存</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

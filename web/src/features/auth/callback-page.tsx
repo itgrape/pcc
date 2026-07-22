@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react"
-import { Loader2 } from "lucide-react"
 import { useNavigate } from "react-router-dom"
 
+import { AuthLoadingScreen } from "./auth-loading-screen"
 import { useAuthStore } from "./store"
 
 export default function CallbackPage() {
@@ -40,12 +40,5 @@ export default function CallbackPage() {
       })
   }, [navigate, handleCallback, logout])
 
-  return (
-    <div className="flex items-center justify-center h-screen">
-      <div className="text-center">
-        <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-muted-foreground" />
-        <p className="text-muted-foreground">正在完成登录...</p>
-      </div>
-    </div>
-  )
+  return <AuthLoadingScreen title="正在完成登录" description="正在验证身份并加载工作空间" />
 }

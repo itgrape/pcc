@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react"
-import { Loader2 } from "lucide-react"
 import { Navigate } from "react-router-dom"
 
+import { AuthLoadingScreen } from "./auth-loading-screen"
 import { useAuthStore } from "./store"
 
 export default function LoginPage() {
@@ -19,12 +19,5 @@ export default function LoginPage() {
     return <Navigate to="/" replace />
   }
 
-  return (
-    <div className="flex items-center justify-center h-screen">
-      <div className="text-center">
-        <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-muted-foreground" />
-        <p className="text-muted-foreground">正在跳转到登录页面...</p>
-      </div>
-    </div>
-  )
+  return <AuthLoadingScreen title="欢迎回来" description="即将跳转到统一身份认证中心" />
 }

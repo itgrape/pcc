@@ -12,7 +12,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
-import { Search, Pencil, Trash2, Shield, Copy, Check } from "lucide-react"
+import { Search, Pencil, Trash2, Shield, Copy, Check, KeyRound, Plus } from "lucide-react"
 import {
   useListAccessKeys,
   useCreateAccessKey,
@@ -101,14 +101,18 @@ export default function AccessKeysPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-7">
+      <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">密钥管理</h1>
-          <p className="text-muted-foreground">管理 API 访问密钥和授权</p>
+          <div className="mb-3 inline-flex items-center gap-2 rounded-full border bg-card/70 px-3 py-1 text-xs font-medium text-muted-foreground shadow-sm">
+            <KeyRound className="h-3.5 w-3.5 text-amber-500" />
+            Credential Security
+          </div>
+          <h1 className="text-3xl font-semibold tracking-tight">访问密钥</h1>
+          <p className="mt-2 text-sm text-muted-foreground">为应用创建独立凭证，并精确控制命名空间权限</p>
         </div>
         <Dialog open={createOpen} onOpenChange={(v) => { setCreateOpen(v); if (!v) setCreatedKey(null) }}>
-          <DialogContent>
+          <DialogContent className="rounded-2xl">
             {createdKey ? (
               <>
                 <DialogHeader>
@@ -160,22 +164,27 @@ export default function AccessKeysPage() {
             )}
           </DialogContent>
         </Dialog>
+        <Button className="rounded-xl shadow-lg shadow-primary/20" onClick={() => setCreateOpen(true)}>
+          <Plus className="h-4 w-4" />
+          创建访问密钥
+        </Button>
       </div>
 
-      <div className="flex items-center gap-2">
-        <div className="relative flex-1 max-w-sm">
+      <div className="flex flex-col gap-3 rounded-2xl border bg-card/65 p-3 shadow-sm backdrop-blur sm:flex-row sm:items-center">
+        <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input placeholder="搜索密钥..." className="pl-9" value={keyword} onChange={(e) => setKeyword(e.target.value)}
+          <Input placeholder="按密钥或描述搜索..." className="h-10 border-0 bg-transparent pl-9 shadow-none focus-visible:ring-0" value={keyword} onChange={(e) => setKeyword(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter") { setSearch(keyword); setPage(1) } }} />
         </div>
-        <Button variant="secondary" size="sm" onClick={() => { setSearch(keyword); setPage(1) }}>搜索</Button>
+        <Button variant="secondary" className="rounded-xl" onClick={() => { setSearch(keyword); setPage(1) }}>搜索</Button>
       </div>
 
-      <Card>
+      <Card className="overflow-hidden border-border/60 bg-card/80 shadow-sm backdrop-blur">
         <CardContent className="p-0">
-          <table className="w-full">
+          <div className="overflow-x-auto">
+          <table className="w-full min-w-[880px]">
             <thead>
-              <tr className="border-b text-sm text-muted-foreground">
+              <tr className="border-b bg-muted/35 text-xs uppercase tracking-wide text-muted-foreground">
                 <th className="text-left font-medium px-6 py-3">ID</th>
                 <th className="text-left font-medium px-6 py-3">密钥</th>
                 <th className="text-left font-medium px-6 py-3">状态</th>
@@ -191,11 +200,14 @@ export default function AccessKeysPage() {
                 <tr><td colSpan={6} className="px-6 py-12 text-center text-muted-foreground">暂无数据</td></tr>
               ) : (
                 list.map((ak: AccessKeyItem) => (
-                  <tr key={ak.id} className="border-b last:border-0 hover:bg-muted/50">
-                    <td className="px-6 py-3 text-sm text-muted-foreground">{ak.id}</td>
-                    <td className="px-6 py-3">
-                      <button onClick={() => { setDetailKey(ak); setDetailOpen(true) }} className="font-mono text-sm hover:text-primary">
-                        {ak.access_key.substring(0, 12)}...
+                  <tr key={ak.id} className="group border-b transition last:border-0 hover:bg-muted/35">
+                    <td className="px-6 py-4 font-mono text-xs text-muted-foreground">#{ak.id}</td>
+                    <td className="px-6 py-4">
+                      <button onClick={() => { setDetailKey(ak); setDetailOpen(true) }} className="flex items-center gap-3 font-mono text-sm hover:text-primary">
+                        <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400">
+                          <KeyRound className="h-4 w-4" />
+                        </span>
+                        {ak.access_key.substring(0, 16)}...
                       </button>
                     </td>
                     <td className="px-6 py-3">
@@ -223,11 +235,12 @@ export default function AccessKeysPage() {
               )}
             </tbody>
           </table>
+          </div>
         </CardContent>
       </Card>
 
       <div className="flex items-center justify-between text-sm text-muted-foreground">
-        <span>共 {total} 条</span>
+        <span>共 <strong className="font-medium text-foreground">{total}</strong> 个访问密钥</span>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(page - 1)}>上一页</Button>
           <Button variant="outline" size="sm" disabled={page * 20 >= total} onClick={() => setPage(page + 1)}>下一页</Button>

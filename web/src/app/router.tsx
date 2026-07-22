@@ -1,13 +1,26 @@
+import { lazy, Suspense } from "react"
 import { BrowserRouter, Route, Routes } from "react-router-dom"
 
 import CallbackPage from "@/features/auth/callback-page"
 import LoginPage from "@/features/auth/login-page"
 import ProtectedRoute from "@/features/auth/protected-route"
 import AppLayout from "@/layouts/app-layout"
-import AccessKeysPage from "@/pages/access-keys"
-import ConfigsPage from "@/pages/configs"
-import DashboardPage from "@/pages/dashboard"
-import NamespacesPage from "@/pages/namespaces"
+
+const DashboardPage = lazy(() => import("@/pages/dashboard"))
+const NamespacesPage = lazy(() => import("@/pages/namespaces"))
+const ConfigsPage = lazy(() => import("@/pages/configs"))
+const AccessKeysPage = lazy(() => import("@/pages/access-keys"))
+
+function RouteFallback() {
+  return (
+    <div className="flex min-h-[50vh] items-center justify-center">
+      <div className="flex items-center gap-3 rounded-2xl border bg-card/80 px-5 py-4 text-sm text-muted-foreground shadow-sm backdrop-blur">
+        <span className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+        正在加载工作空间…
+      </div>
+    </div>
+  )
+}
 
 export function AppRouter() {
   return (
@@ -17,10 +30,10 @@ export function AppRouter() {
         <Route path="/callback" element={<CallbackPage />} />
         <Route element={<ProtectedRoute />}>
           <Route element={<AppLayout />}>
-            <Route path="/" element={<DashboardPage />} />
-            <Route path="/namespaces" element={<NamespacesPage />} />
-            <Route path="/namespaces/:namespaceId/configs" element={<ConfigsPage />} />
-            <Route path="/access-keys" element={<AccessKeysPage />} />
+            <Route path="/" element={<Suspense fallback={<RouteFallback />}><DashboardPage /></Suspense>} />
+            <Route path="/namespaces" element={<Suspense fallback={<RouteFallback />}><NamespacesPage /></Suspense>} />
+            <Route path="/namespaces/:namespaceId/configs" element={<Suspense fallback={<RouteFallback />}><ConfigsPage /></Suspense>} />
+            <Route path="/access-keys" element={<Suspense fallback={<RouteFallback />}><AccessKeysPage /></Suspense>} />
           </Route>
         </Route>
       </Routes>
