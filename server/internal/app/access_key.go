@@ -131,6 +131,22 @@ func (uc *AccessKeyUsecase) ListByNamespace(ctx context.Context, namespaceID uin
 }
 
 func (uc *AccessKeyUsecase) GrantNamespace(ctx context.Context, akID, nsID uint64, permission model.Permission) (*model.AccessKeyNamespace, error) {
+	if !validPermission(permission) {
+		return nil, domain.ErrValidation
+	}
+	if _, err := uc.store.AccessKey.GetByID(ctx, akID); err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return nil, domain.ErrAccessKeyNotFound
+		}
+		return nil, domain.MapError(err)
+	}
+	if _, err := uc.store.Namespace.GetByID(ctx, nsID); err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return nil, domain.ErrNamespaceNotFound
+		}
+		return nil, domain.MapError(err)
+	}
+
 	akn := &model.AccessKeyNamespace{
 		AccessKeyID: akID,
 		NamespaceID: nsID,
@@ -146,6 +162,9 @@ func (uc *AccessKeyUsecase) GrantNamespace(ctx context.Context, akID, nsID uint6
 }
 
 func (uc *AccessKeyUsecase) UpdatePermission(ctx context.Context, akID, nsID uint64, permission model.Permission) (*model.AccessKeyNamespace, error) {
+	if !validPermission(permission) {
+		return nil, domain.ErrValidation
+	}
 	akn, err := uc.store.AccessKeyNamespace.GetByAccessKeyAndNamespace(ctx, akID, nsID)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
@@ -185,4 +204,8 @@ func generateRandomString(length int) (string, error) {
 		return "", err
 	}
 	return hex.EncodeToString(b), nil
+}
+
+func validPermission(permission model.Permission) bool {
+	return permission == model.PermissionReadOnly || permission == model.PermissionReadWrite
 }

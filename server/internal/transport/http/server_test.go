@@ -1,16 +1,19 @@
 package httpapi
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
 	"github.com/itgrape/pcc/server/internal/app"
 	"github.com/itgrape/pcc/server/internal/domain"
+	"github.com/itgrape/pcc/server/internal/model"
 )
 
 type rejectingAuthenticator struct{}
@@ -27,6 +30,21 @@ type acceptingAuthenticator struct {
 	rejectingAuthenticator
 }
 
+type runtimeConfigProviderFake struct {
+	config *model.Config
+}
+
+func (f runtimeConfigProviderFake) Get(_ context.Context, accessKey, secret, namespace, configName string) (*model.Config, error) {
+	if accessKey != "pcc_ak_service" || secret != "pcc_sk_service" || namespace != "production" || configName != "database" {
+		return nil, domain.ErrUnauthenticated
+	}
+	return f.config, nil
+}
+
+func (f runtimeConfigProviderFake) List(context.Context, string, string, string) ([]*model.Config, error) {
+	return []*model.Config{f.config}, nil
+}
+
 func (acceptingAuthenticator) Authenticate(authHeader string) (*domain.Identity, error) {
 	if authHeader != "Bearer valid-token" {
 		return nil, errors.New("unauthorized")
@@ -37,10 +55,11 @@ func (acceptingAuthenticator) Authenticate(authHeader string) (*domain.Identity,
 func TestAdminRoutesRequireAuthentication(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router, err := New(Deps{
-		Namespaces: new(app.NamespaceUsecase),
-		Configs:    new(app.ConfigUsecase),
-		AccessKeys: new(app.AccessKeyUsecase),
-		Auth:       rejectingAuthenticator{},
+		Namespaces:     new(app.NamespaceUsecase),
+		Configs:        new(app.ConfigUsecase),
+		AccessKeys:     new(app.AccessKeyUsecase),
+		RuntimeConfigs: new(app.RuntimeConfigUsecase),
+		Auth:           rejectingAuthenticator{},
 	})
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
@@ -77,10 +96,11 @@ func TestAdminRoutesRequireAuthentication(t *testing.T) {
 func TestOAuthCallbackIsPublic(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router, err := New(Deps{
-		Namespaces: new(app.NamespaceUsecase),
-		Configs:    new(app.ConfigUsecase),
-		AccessKeys: new(app.AccessKeyUsecase),
-		Auth:       rejectingAuthenticator{},
+		Namespaces:     new(app.NamespaceUsecase),
+		Configs:        new(app.ConfigUsecase),
+		AccessKeys:     new(app.AccessKeyUsecase),
+		RuntimeConfigs: new(app.RuntimeConfigUsecase),
+		Auth:           rejectingAuthenticator{},
 	})
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
@@ -99,10 +119,11 @@ func TestOAuthCallbackIsPublic(t *testing.T) {
 func TestDocumentationRoutesRequireAuthentication(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router, err := New(Deps{
-		Namespaces: new(app.NamespaceUsecase),
-		Configs:    new(app.ConfigUsecase),
-		AccessKeys: new(app.AccessKeyUsecase),
-		Auth:       rejectingAuthenticator{},
+		Namespaces:     new(app.NamespaceUsecase),
+		Configs:        new(app.ConfigUsecase),
+		AccessKeys:     new(app.AccessKeyUsecase),
+		RuntimeConfigs: new(app.RuntimeConfigUsecase),
+		Auth:           rejectingAuthenticator{},
 	})
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
@@ -122,10 +143,11 @@ func TestDocumentationRoutesRequireAuthentication(t *testing.T) {
 func TestAuthenticatedUserIsInjectedIntoRequestContext(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router, err := New(Deps{
-		Namespaces: new(app.NamespaceUsecase),
-		Configs:    new(app.ConfigUsecase),
-		AccessKeys: new(app.AccessKeyUsecase),
-		Auth:       acceptingAuthenticator{},
+		Namespaces:     new(app.NamespaceUsecase),
+		Configs:        new(app.ConfigUsecase),
+		AccessKeys:     new(app.AccessKeyUsecase),
+		RuntimeConfigs: new(app.RuntimeConfigUsecase),
+		Auth:           acceptingAuthenticator{},
 	})
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
@@ -141,5 +163,52 @@ func TestAuthenticatedUserIsInjectedIntoRequestContext(t *testing.T) {
 	}
 	if !strings.Contains(recorder.Body.String(), `"name":"alice"`) {
 		t.Fatalf("user info body does not contain authenticated user: %s", recorder.Body.String())
+	}
+}
+
+func TestRuntimeConfigUsesAccessKeyCredentials(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	config := &model.Config{
+		Base: model.Base{
+			ID:        30,
+			Version:   4,
+			UpdatedAt: time.Date(2026, 7, 22, 10, 0, 0, 0, time.UTC),
+		},
+		ConfigName: "database",
+		Format:     model.ConfigFormatJSON,
+		Content:    `{"host":"db.internal"}`,
+	}
+	router, err := New(Deps{
+		Namespaces:     new(app.NamespaceUsecase),
+		Configs:        new(app.ConfigUsecase),
+		AccessKeys:     new(app.AccessKeyUsecase),
+		RuntimeConfigs: runtimeConfigProviderFake{config: config},
+		Auth:           rejectingAuthenticator{},
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	path := runtimeBasePath + "/namespaces/production/configs/database"
+	unauthorized := httptest.NewRequest(http.MethodGet, path, nil)
+	unauthorizedRecorder := httptest.NewRecorder()
+	router.ServeHTTP(unauthorizedRecorder, unauthorized)
+	if unauthorizedRecorder.Code != http.StatusUnauthorized {
+		t.Fatalf("request without credentials returned %d, want %d", unauthorizedRecorder.Code, http.StatusUnauthorized)
+	}
+
+	authorized := httptest.NewRequest(http.MethodGet, path, nil)
+	authorized.Header.Set(accessKeyHeader, "pcc_ak_service")
+	authorized.Header.Set(accessSecretHeader, "pcc_sk_service")
+	authorizedRecorder := httptest.NewRecorder()
+	router.ServeHTTP(authorizedRecorder, authorized)
+	if authorizedRecorder.Code != http.StatusOK {
+		t.Fatalf("authorized request returned %d, want %d; body=%s", authorizedRecorder.Code, http.StatusOK, authorizedRecorder.Body.String())
+	}
+	if !strings.Contains(authorizedRecorder.Body.String(), `"content":"{\"host\":\"db.internal\"}"`) {
+		t.Fatalf("authorized response does not contain config: %s", authorizedRecorder.Body.String())
+	}
+	if authorizedRecorder.Header().Get("ETag") != `"30-4"` {
+		t.Fatalf("ETag = %q, want %q", authorizedRecorder.Header().Get("ETag"), `"30-4"`)
 	}
 }

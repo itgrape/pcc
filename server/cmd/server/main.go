@@ -56,12 +56,19 @@ func run() error {
 	nsUsecase := app.NewNamespaceUsecase(store.Namespace, store.Config, store.AccessKeyNamespace)
 	cfgUsecase := app.NewConfigUsecase(store, bus)
 	akUsecase := app.NewAccessKeyUsecase(store)
+	runtimeConfigUsecase := app.NewRuntimeConfigUsecase(
+		store.AccessKey,
+		store.Namespace,
+		store.AccessKeyNamespace,
+		store.Config,
+	)
 
 	r, err := httpapi.New(httpapi.Deps{
-		Namespaces: nsUsecase,
-		Configs:    cfgUsecase,
-		AccessKeys: akUsecase,
-		Auth:       auth,
+		Namespaces:     nsUsecase,
+		Configs:        cfgUsecase,
+		AccessKeys:     akUsecase,
+		RuntimeConfigs: runtimeConfigUsecase,
+		Auth:           auth,
 	})
 	if err != nil {
 		return err

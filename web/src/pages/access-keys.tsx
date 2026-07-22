@@ -22,6 +22,7 @@ import {
   useGrantKeyNamespace,
   useRevokeKeyNamespace,
   getListAccessKeysQueryKey,
+  getListKeyNamespacesQueryKey,
 } from "@/lib/orval/access-keys/access-keys"
 import { useListNamespaces } from "@/lib/orval/namespaces/namespaces"
 
@@ -81,6 +82,8 @@ export default function AccessKeysPage() {
   const { data: keyNsRes } = useListKeyNamespaces(Number(detailKey?.id))
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: getListAccessKeysQueryKey() })
+  const invalidateKeyNamespaces = (keyId: number) =>
+    queryClient.invalidateQueries({ queryKey: getListKeyNamespacesQueryKey(keyId) })
 
   const { mutate: createMutate } = useCreateAccessKey()
   const { mutate: updateMutate } = useUpdateAccessKey()
@@ -303,7 +306,7 @@ export default function AccessKeysPage() {
             <Button variant="outline" onClick={() => setGrantOpen(false)}>取消</Button>
             <Button onClick={() => grantMutate(
               { keyId: Number(grantKey!.id), data: { namespace_id: parseInt(grantForm.namespace_id), permission: parseInt(grantForm.permission) } },
-              { onSuccess: () => { invalidate(); setGrantOpen(false) } },
+              { onSuccess: () => { invalidate(); invalidateKeyNamespaces(Number(grantKey!.id)); setGrantOpen(false) } },
             )} disabled={!grantForm.namespace_id}>授权</Button>
           </DialogFooter>
         </DialogContent>
@@ -336,7 +339,7 @@ export default function AccessKeysPage() {
                       <Button variant="ghost" size="sm" className="text-destructive"
                         onClick={() => revokeMutate(
                           { keyId: Number(detailKey!.id), namespaceId: Number(akn.namespace_id) },
-                          { onSuccess: () => invalidate() },
+                          { onSuccess: () => { invalidate(); invalidateKeyNamespaces(Number(detailKey!.id)) } },
                         )}>
                         解除
                       </Button>
