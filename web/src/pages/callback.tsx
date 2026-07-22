@@ -1,31 +1,36 @@
-import { useEffect } from "react"
+import { useEffect, useRef } from "react"
 import { useNavigate } from "react-router-dom"
 import { useAuthStore } from "@/stores/auth"
 import { Loader2 } from "lucide-react"
 
 export default function CallbackPage() {
   const navigate = useNavigate()
-  const { handleCallback } = useAuthStore()
+  const { handleCallback, logout } = useAuthStore()
+  const started = useRef(false)
 
   useEffect(() => {
+    if (started.current) {
+      return
+    }
+    started.current = true
+
     const code = new URLSearchParams(window.location.search).get("code")
     const state = new URLSearchParams(window.location.search).get("state")
-    if (!code) {
+    const storedState = sessionStorage.getItem("casdoor_oauth_state")
+    if (!code || !state || !storedState) {
+      logout()
       navigate("/login", { replace: true })
       return
     }
 
-    const storedState = sessionStorage.getItem("pkce_state")
-    if (storedState && state && state !== storedState) {
+    if (state !== storedState) {
       console.error("State mismatch, possible CSRF attack")
+      logout()
       navigate("/login", { replace: true })
       return
     }
 
-    // 清除旧 token，避免干扰
-    localStorage.removeItem("casdoor_token")
-
-    handleCallback()
+    handleCallback(code, state)
       .then(() => {
         navigate("/", { replace: true })
       })
@@ -33,7 +38,7 @@ export default function CallbackPage() {
         console.error("Login callback failed:", err)
         navigate("/login", { replace: true })
       })
-  }, [navigate, handleCallback])
+  }, [navigate, handleCallback, logout])
 
   return (
     <div className="flex items-center justify-center h-screen">

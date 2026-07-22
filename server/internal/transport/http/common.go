@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/casdoor/casdoor-go-sdk/casdoorsdk"
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/gin-gonic/gin"
 
@@ -56,16 +57,15 @@ func statusFor(k domain.Kind) int {
 
 type ctxKey string
 
-const userCtxKey ctxKey = "username"
+const userCtxKey ctxKey = "user"
 
 // ---- Casdoor 鉴权中间件 ----
 
-// AuthMiddleware 从 Authorization header 提取 Casdoor JWT，校验后将用户名写入请求 context。
-// 后续 huma handler 可通过 GetUsername(ctx) 获取。
-func AuthMiddleware(verifyFn func(string) (string, error)) gin.HandlerFunc {
+// AuthMiddleware 从 Authorization header 提取 Casdoor JWT，校验后将用户写入请求 context。
+func AuthMiddleware(verifyFn func(string) (*casdoorsdk.User, error)) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		auth := c.GetHeader("Authorization")
-		username, err := verifyFn(auth)
+		user, err := verifyFn(auth)
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, types.Response{
 				Code:    http.StatusUnauthorized,
@@ -74,17 +74,25 @@ func AuthMiddleware(verifyFn func(string) (string, error)) gin.HandlerFunc {
 			return
 		}
 		// 注入到请求 context，huma handler 的 ctx 可以获取到
-		ctx := context.WithValue(c.Request.Context(), userCtxKey, username)
+		ctx := context.WithValue(c.Request.Context(), userCtxKey, user)
 		c.Request = c.Request.WithContext(ctx)
 		c.Next()
 	}
 }
 
+func GetUser(ctx context.Context) (*casdoorsdk.User, error) {
+	user, ok := ctx.Value(userCtxKey).(*casdoorsdk.User)
+	if !ok || user == nil || user.Name == "" {
+		return nil, errors.New("unauthenticated")
+	}
+	return user, nil
+}
+
 // GetUsername 从 huma handler 的 context 中提取当前用户名。
 func GetUsername(ctx context.Context) (string, error) {
-	u, ok := ctx.Value(userCtxKey).(string)
-	if !ok || u == "" {
-		return "", errors.New("unauthenticated")
+	user, err := GetUser(ctx)
+	if err != nil {
+		return "", err
 	}
-	return u, nil
+	return user.Name, nil
 }

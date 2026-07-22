@@ -3,7 +3,11 @@ import sdk from "@/lib/sdk"
 import { getUserInfo } from "@/lib/orval/user/user"
 
 interface UserInfo {
-  username: string
+  name: string
+  displayName?: string
+  email?: string
+  avatar?: string
+  [key: string]: unknown
 }
 
 interface AuthState {
@@ -12,66 +16,76 @@ interface AuthState {
   isInitializing: boolean
   isAuthenticated: boolean
   login: () => void
-  handleCallback: () => Promise<void>
+  handleCallback: (code: string, state: string) => Promise<void>
   logout: () => void
   fetchUser: () => Promise<void>
+}
+
+let callbackPromise: Promise<void> | null = null
+
+async function requestUser(): Promise<UserInfo> {
+  const res = await getUserInfo()
+  const user = (res.data as { data?: UserInfo }).data
+  if (!user?.name) {
+    throw new Error("User info response is empty")
+  }
+  return user
 }
 
 export const useAuthStore = create<AuthState>()((set, get) => ({
   token: localStorage.getItem("casdoor_token"),
   user: null,
   isInitializing: true,
-  isAuthenticated: !!localStorage.getItem("casdoor_token"),
+  isAuthenticated: false,
 
   login: () => {
-    sdk.signin_redirect()
+    const state = crypto.randomUUID()
+    sessionStorage.setItem("casdoor_oauth_state", state)
+    const signinUrl = new URL(sdk.getSigninUrl())
+    signinUrl.searchParams.set("state", state)
+    window.location.assign(signinUrl.toString())
   },
 
-  handleCallback: async () => {
-    const params = new URLSearchParams(window.location.search)
-    const code = params.get("code")
-    const verifier = sessionStorage.getItem("pkce_code_verifier") || ""
-
-    // 走 /casdoor-proxy 避免跨域问题
-    const resp = await fetch("/casdoor-proxy/api/login/oauth/access_token", {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
-        grant_type: "authorization_code",
-        code: code || "",
-        client_id: import.meta.env.VITE_CASDOOR_CLIENT_ID || "",
-        redirect_uri: `${window.location.origin}/callback`,
-        code_verifier: verifier,
-      }),
-    })
-
-    if (!resp.ok) {
-      throw new Error(`Token exchange failed: ${resp.status}`)
+  handleCallback: (code, state) => {
+    if (callbackPromise) {
+      return callbackPromise
     }
 
-    const data = await resp.json()
-    const token = data.access_token
-    if (!token) {
-      throw new Error("No access_token in response")
-    }
+    callbackPromise = (async () => {
+      try {
+        const resp = await fetch("/api/v1/auth/callback", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ code, state }),
+        })
+        if (!resp.ok) {
+          throw new Error(`Token exchange failed: ${resp.status}`)
+        }
 
-    localStorage.setItem("casdoor_token", token)
-    sessionStorage.clear()
-    set({ token, isAuthenticated: true })
+        const data = (await resp.json()) as { data?: string }
+        if (!data.data) {
+          throw new Error("No access token in response")
+        }
 
-    // 获取用户信息
-    try {
-      const res = await getUserInfo()
-      const user = (res?.data as unknown as { data?: UserInfo })?.data ?? null
-      set({ user, isInitializing: false })
-    } catch {
-      set({ isInitializing: false })
-    }
+        localStorage.setItem("casdoor_token", data.data)
+        set({ token: data.data })
+
+        const user = await requestUser()
+        sessionStorage.removeItem("casdoor_oauth_state")
+        set({ user, isAuthenticated: true, isInitializing: false })
+      } catch (error) {
+        localStorage.removeItem("casdoor_token")
+        set({ token: null, user: null, isAuthenticated: false, isInitializing: false })
+        throw error
+      }
+    })()
+
+    return callbackPromise
   },
 
   logout: () => {
     localStorage.removeItem("casdoor_token")
-    set({ token: null, user: null, isAuthenticated: false })
+    set({ token: null, user: null, isAuthenticated: false, isInitializing: false })
   },
 
   fetchUser: async () => {
@@ -82,15 +96,21 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
     }
 
     try {
-      const res = await getUserInfo()
-      const user = (res?.data as unknown as { data?: UserInfo })?.data ?? null
+      const user = await requestUser()
       set({ user, isAuthenticated: true, isInitializing: false })
     } catch {
       localStorage.removeItem("casdoor_token")
-      set({ token: null, isAuthenticated: false, isInitializing: false })
+      set({ token: null, user: null, isAuthenticated: false, isInitializing: false })
     }
   },
 }))
 
-// 模块级别启动初始化
-useAuthStore.getState().fetchUser()
+// Callback owns initialization while it exchanges the one-time authorization
+// code. Running a stale-token user request in parallel could erase the new token.
+if (window.location.pathname !== "/callback") {
+  useAuthStore.getState().fetchUser()
+}
+
+window.addEventListener("pcc:unauthorized", () => {
+  useAuthStore.getState().logout()
+})

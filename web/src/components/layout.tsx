@@ -65,10 +65,10 @@ export default function AppLayout() {
           <div className={cn("flex items-center gap-3 rounded-lg px-3 py-2", collapsed && "justify-center")}>
             <Avatar className="h-8 w-8">
               <AvatarFallback className="bg-sidebar-accent text-sidebar-accent-foreground text-xs">
-                {user?.username?.charAt(0).toUpperCase() || "U"}
+                {(user?.displayName || user?.name)?.charAt(0).toUpperCase() || "U"}
               </AvatarFallback>
             </Avatar>
-            {!collapsed && <div className="flex-1 min-w-0"><p className="text-sm font-medium truncate">{user?.username || "用户"}</p></div>}
+            {!collapsed && <div className="flex-1 min-w-0"><p className="text-sm font-medium truncate">{user?.displayName || user?.name || "用户"}</p></div>}
           </div>
 
           <Button

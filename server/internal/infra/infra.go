@@ -2,10 +2,10 @@ package infra
 
 import (
 	"fmt"
+	"slices"
 	"strings"
-	"sync"
 
-	"github.com/golang-jwt/jwt/v4"
+	"github.com/casdoor/casdoor-go-sdk/casdoorsdk"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -44,76 +44,82 @@ func OpenDB(dbCfg config.DBConfig, nodeID int64) (*gorm.DB, error) {
 	return db, nil
 }
 
-// ---- Casdoor JWT 解析 ----
+// ---- Casdoor authentication ----
 
-type casdoorClaims struct {
-	User
-	jwt.RegisteredClaims
-	TokenType string `json:"tokenType"`
+type Casdoor struct {
+	client *casdoorsdk.Client
 }
 
-type User struct {
-	Name  string `json:"name"`
-	Owner string `json:"owner"`
-	Email string `json:"email"`
+// NewCasdoor creates the SDK client and loads the application's public
+// certificate from Casdoor, so deployments do not need to carry a PEM value.
+func NewCasdoor(cfg config.CasdoorConfig) (*Casdoor, error) {
+	client := casdoorsdk.NewClient(
+		strings.TrimRight(cfg.Endpoint, "/"),
+		cfg.ClientID,
+		cfg.ClientSecret,
+		"",
+		cfg.Organization,
+		cfg.Application,
+	)
+
+	application, err := client.GetApplication(cfg.Application)
+	if err != nil {
+		return nil, fmt.Errorf("infra: get Casdoor application: %w", err)
+	}
+
+	certificate := application.CertPublicKey
+	if certificate == "" && application.CertObj != nil {
+		certificate = application.CertObj.Certificate
+	}
+	if certificate == "" && application.Cert != "" {
+		cert, certErr := client.GetCert(application.Cert)
+		if certErr != nil {
+			return nil, fmt.Errorf("infra: get Casdoor certificate: %w", certErr)
+		}
+		certificate = cert.Certificate
+	}
+	if certificate == "" {
+		return nil, fmt.Errorf("infra: Casdoor application %q has no public certificate", cfg.Application)
+	}
+	client.Certificate = certificate
+
+	return &Casdoor{client: client}, nil
 }
 
-var (
-	certMu  sync.RWMutex
-	certPEM string
-)
-
-// InitCasdoor 初始化 Casdoor 公钥证书。必须在 GetUserFromToken 前调用。
-func InitCasdoor(certificate string) {
-	certMu.Lock()
-	certPEM = certificate
-	certMu.Unlock()
+func (c *Casdoor) ExchangeCode(code, state string) (string, error) {
+	if code == "" {
+		return "", fmt.Errorf("missing authorization code")
+	}
+	token, err := c.client.GetOAuthToken(code, state)
+	if err != nil {
+		return "", fmt.Errorf("exchange OAuth code: %w", err)
+	}
+	if token.AccessToken == "" {
+		return "", fmt.Errorf("Casdoor returned an empty access token")
+	}
+	return token.AccessToken, nil
 }
 
-// GetUserFromToken 从 Authorization header 解析 Casdoor JWT，返回用户名。
-func GetUserFromToken(authHeader string) (string, error) {
+// GetUserFromToken verifies a Casdoor access token and returns all user claims
+// included in it.
+func (c *Casdoor) GetUserFromToken(authHeader string) (*casdoorsdk.User, error) {
 	token := strings.TrimPrefix(authHeader, "Bearer ")
 	if token == "" || token == authHeader {
-		return "", fmt.Errorf("missing or malformed authorization header")
+		return nil, fmt.Errorf("missing or malformed authorization header")
 	}
 
-	certMu.RLock()
-	cert := certPEM
-	certMu.RUnlock()
-	if cert == "" {
-		return "", fmt.Errorf("casdoor certificate not initialized")
-	}
-
-	claims, err := verifyToken(token, cert)
+	claims, err := c.client.ParseJwtToken(token)
 	if err != nil {
-		return "", err
+		return nil, fmt.Errorf("parse Casdoor token: %w", err)
 	}
-	return claims.Name, nil
-}
-
-func verifyToken(tokenStr, cert string) (*casdoorClaims, error) {
-	claims := &casdoorClaims{}
-	keyFunc := func(token *jwt.Token) (interface{}, error) {
-		switch token.Method.Alg() {
-		case jwt.SigningMethodES256.Alg():
-			return jwt.ParseECPublicKeyFromPEM([]byte(cert))
-		case jwt.SigningMethodES512.Alg():
-			return jwt.ParseECPublicKeyFromPEM([]byte(cert))
-		case jwt.SigningMethodRS256.Alg():
-			return jwt.ParseRSAPublicKeyFromPEM([]byte(cert))
-		case jwt.SigningMethodRS512.Alg():
-			return jwt.ParseRSAPublicKeyFromPEM([]byte(cert))
-		default:
-			return nil, fmt.Errorf("unsupported jwt signing method: %v", token.Header["alg"])
-		}
+	if claims.TokenType != "" && claims.TokenType != "access-token" {
+		return nil, fmt.Errorf("unexpected Casdoor token type %q", claims.TokenType)
 	}
-
-	t, err := jwt.ParseWithClaims(tokenStr, claims, keyFunc)
-	if err != nil {
-		return nil, fmt.Errorf("jwt parse: %w", err)
+	if !slices.Contains(claims.Audience, c.client.ClientId) {
+		return nil, fmt.Errorf("Casdoor token audience does not contain this client")
 	}
-	if !t.Valid {
-		return nil, fmt.Errorf("jwt token invalid")
+	if claims.Name == "" {
+		return nil, fmt.Errorf("Casdoor token has no user name")
 	}
-	return claims, nil
+	return &claims.User, nil
 }

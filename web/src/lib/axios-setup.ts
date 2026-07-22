@@ -15,6 +15,7 @@ axios.interceptors.response.use(
   (err) => {
     if (err.response?.status === 401) {
       localStorage.removeItem("casdoor_token")
+      window.dispatchEvent(new Event("pcc:unauthorized"))
     }
     return Promise.reject(err)
   }

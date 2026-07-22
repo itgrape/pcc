@@ -28,7 +28,11 @@ type DBConfig struct {
 }
 
 type CasdoorConfig struct {
-	Certificate string // Casdoor PEM 公钥，用于 JWT 验签
+	Endpoint     string
+	ClientID     string
+	ClientSecret string
+	Organization string
+	Application  string
 }
 
 type SnowflakeConfig struct {
@@ -49,7 +53,11 @@ func Load() (*Config, error) {
 			ConnMaxLifetime: envDuration("PCC_DB_CONN_MAX_LIFETIME", time.Hour),
 		},
 		Casdoor: CasdoorConfig{
-			Certificate: env("PCC_CASDOOR_CERTIFICATE", ""),
+			Endpoint:     env("PCC_CASDOOR_ENDPOINT", ""),
+			ClientID:     env("PCC_CASDOOR_CLIENT_ID", ""),
+			ClientSecret: env("PCC_CASDOOR_CLIENT_SECRET", ""),
+			Organization: env("PCC_CASDOOR_ORGANIZATION", ""),
+			Application:  env("PCC_CASDOOR_APPLICATION", ""),
 		},
 		Snowflake: SnowflakeConfig{
 			NodeID: int64(envInt("PCC_SNOWFLAKE_NODE_ID", 1)),
@@ -59,8 +67,10 @@ func Load() (*Config, error) {
 	if cfg.DB.DSN == "" {
 		return nil, fmt.Errorf("config: PCC_DB_DSN is required")
 	}
-	if cfg.Casdoor.Certificate == "" {
-		return nil, fmt.Errorf("config: PCC_CASDOOR_CERTIFICATE is required")
+	if cfg.Casdoor.Endpoint == "" || cfg.Casdoor.ClientID == "" ||
+		cfg.Casdoor.ClientSecret == "" || cfg.Casdoor.Organization == "" ||
+		cfg.Casdoor.Application == "" {
+		return nil, fmt.Errorf("config: PCC_CASDOOR_ENDPOINT, PCC_CASDOOR_CLIENT_ID, PCC_CASDOOR_CLIENT_SECRET, PCC_CASDOOR_ORGANIZATION and PCC_CASDOOR_APPLICATION are required")
 	}
 	return cfg, nil
 }

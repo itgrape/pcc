@@ -44,8 +44,10 @@ func run() error {
 	}
 	store := repository.New(db)
 
-	// 初始化 Casdoor JWT 验签
-	infra.InitCasdoor(cfg.Casdoor.Certificate)
+	auth, err := infra.NewCasdoor(cfg.Casdoor)
+	if err != nil {
+		return err
+	}
 
 	// 事件总线
 	bus := app.NewEventBus()
@@ -61,6 +63,7 @@ func run() error {
 		AccessKeys: akUsecase,
 		Bus:        bus,
 		Store:      store,
+		Auth:       auth,
 	})
 
 	srv := &http.Server{

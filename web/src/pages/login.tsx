@@ -1,15 +1,22 @@
-import { useEffect } from "react"
+import { useEffect, useRef } from "react"
+import { Navigate } from "react-router-dom"
 import { useAuthStore } from "@/stores/auth"
 import { Loader2 } from "lucide-react"
 
 export default function LoginPage() {
-  const { login, isAuthenticated } = useAuthStore()
+  const { login, isAuthenticated, isInitializing } = useAuthStore()
+  const redirectStarted = useRef(false)
 
   useEffect(() => {
-    if (!isAuthenticated) {
+    if (!isInitializing && !isAuthenticated && !redirectStarted.current) {
+      redirectStarted.current = true
       login()
     }
-  }, [isAuthenticated, login])
+  }, [isAuthenticated, isInitializing, login])
+
+  if (!isInitializing && isAuthenticated) {
+    return <Navigate to="/" replace />
+  }
 
   return (
     <div className="flex items-center justify-center h-screen">

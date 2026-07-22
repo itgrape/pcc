@@ -18,6 +18,7 @@ type Deps struct {
 	AccessKeys *app.AccessKeyUsecase
 	Bus        *app.EventBus
 	Store      *repository.Store
+	Auth       *infra.Casdoor
 }
 
 type handlers struct {
@@ -26,19 +27,20 @@ type handlers struct {
 
 func New(deps Deps) *gin.Engine {
 	r := gin.Default()
+	h := &handlers{deps: deps}
+	r.POST("/api/v1/auth/callback", h.exchangeOAuthCode)
+
 	cfg := huma.DefaultConfig("PCC Config Center", "1.0.0")
 	api := humagin.New(r, cfg)
 
-	h := &handlers{deps: deps}
-	h.register(api, r)
+	// All Huma business routes below are administrative APIs.
+	r.Use(AuthMiddleware(deps.Auth.GetUserFromToken))
+	h.register(api)
 
 	return r
 }
 
-func (h *handlers) register(api huma.API, r *gin.Engine) {
-	admin := r.Group("/api/v1/admin")
-	admin.Use(AuthMiddleware(infra.GetUserFromToken))
-
+func (h *handlers) register(api huma.API) {
 	// huma 注册接口（huma handler 的上下文通过 ctx.Value 传递）
 	base := "/api/v1/admin"
 
