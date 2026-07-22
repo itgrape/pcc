@@ -87,7 +87,7 @@ func TestAdminRoutesRequireAuthentication(t *testing.T) {
 		}
 	}
 
-	const expectedAdminRoutes = 25
+	const expectedAdminRoutes = 26
 	if tested != expectedAdminRoutes {
 		t.Fatalf("tested %d administrative routes, want %d", tested, expectedAdminRoutes)
 	}

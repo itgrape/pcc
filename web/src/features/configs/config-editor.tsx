@@ -1,12 +1,17 @@
 import { useEffect, useMemo, useState } from "react"
-import Editor, { type Monaco } from "@monaco-editor/react"
+import { autocompletion, type CompletionContext } from "@codemirror/autocomplete"
+import { json } from "@codemirror/lang-json"
+import { yaml } from "@codemirror/lang-yaml"
+import { StreamLanguage } from "@codemirror/language"
+import { properties } from "@codemirror/legacy-modes/mode/properties"
+import { oneDark } from "@codemirror/theme-one-dark"
+import CodeMirror from "@uiw/react-codemirror"
 import { Braces, CheckCircle2, Sparkles, TriangleAlert } from "lucide-react"
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml"
 
 import { Button } from "@/components/ui/button"
 import { useTheme } from "@/features/theme/theme-context"
 import { cn } from "@/lib/utils"
-import "@/shared/editor/monaco"
 
 interface ConfigEditorProps {
   value: string
@@ -55,13 +60,33 @@ function validateContent(value: string, format: number) {
   }
 }
 
-function configureMonaco(monaco: Monaco) {
-  monaco.languages.json.jsonDefaults.setDiagnosticsOptions({
-    validate: true,
-    allowComments: false,
-    trailingCommas: "error",
-    enableSchemaRequest: false,
-  })
+function configCompletions(context: CompletionContext) {
+  const word = context.matchBefore(/[\w.-]*/)
+  if (!word || (word.from === word.to && !context.explicit)) {
+    return null
+  }
+  return {
+    from: word.from,
+    options: [
+      { label: "true", type: "keyword" },
+      { label: "false", type: "keyword" },
+      { label: "null", type: "keyword" },
+      { label: "localhost", type: "text" },
+    ],
+  }
+}
+
+function languageExtension(format: number) {
+  switch (format) {
+    case 1:
+      return json()
+    case 2:
+      return yaml()
+    case 4:
+      return StreamLanguage.define(properties)
+    default:
+      return []
+  }
 }
 
 export function ConfigEditor({
@@ -74,6 +99,10 @@ export function ConfigEditor({
   const { theme } = useTheme()
   const [formatError, setFormatError] = useState<string | null>(null)
   const language = languages[format] ?? languages[3]
+  const extensions = useMemo(
+    () => [languageExtension(format), autocompletion({ override: [configCompletions] })],
+    [format],
+  )
   const validationError = useMemo(() => validateContent(value, format), [value, format])
   const error = formatError ?? validationError
 
@@ -122,34 +151,26 @@ export function ConfigEditor({
           </Button>
         </div>
       </div>
-      <Editor
-        height={height}
-        language={language.id}
+      <CodeMirror
+        height={`${height}px`}
         value={value}
-        theme={theme === "dark" ? "vs-dark" : "vs"}
-        beforeMount={configureMonaco}
+        theme={theme === "dark" ? oneDark : "light"}
+        extensions={extensions}
         onChange={(nextValue) => {
           setFormatError(null)
-          onChange(nextValue ?? "")
+          onChange(nextValue)
         }}
-        options={{
-          minimap: { enabled: false },
-          fontFamily: '"SFMono-Regular", Consolas, "Liberation Mono", monospace',
-          fontSize: 13,
-          lineHeight: 21,
-          automaticLayout: true,
-          formatOnPaste: true,
-          formatOnType: true,
-          quickSuggestions: { other: true, comments: false, strings: true },
-          suggestOnTriggerCharacters: true,
-          tabSize: 2,
-          padding: { top: 14, bottom: 14 },
-          scrollBeyondLastLine: false,
-          renderLineHighlight: "gutter",
-          bracketPairColorization: { enabled: true },
-          guides: { bracketPairs: true, indentation: true },
-          wordWrap: "on",
+        basicSetup={{
+          autocompletion: true,
+          bracketMatching: true,
+          closeBrackets: true,
+          foldGutter: true,
+          highlightActiveLine: true,
+          highlightActiveLineGutter: true,
+          indentOnInput: true,
+          lineNumbers: true,
         }}
+        className="text-[13px] [&_.cm-content]:font-mono [&_.cm-content]:leading-[21px] [&_.cm-editor]:outline-none [&_.cm-gutters]:border-r [&_.cm-gutters]:border-border/60"
       />
       {error && (
         <div className="border-t border-destructive/20 bg-destructive/5 px-4 py-2 text-xs text-destructive">

@@ -3,18 +3,24 @@ import {
   Activity,
   ArrowUpRight,
   CircleCheck,
+  CloudCog,
   FileCode2,
   FolderKanban,
   KeyRound,
   ShieldCheck,
-  Sparkles,
   Zap,
 } from "lucide-react"
 import { Link } from "react-router-dom"
+import { useQuery } from "@tanstack/react-query"
 
 import { Card, CardContent } from "@/components/ui/card"
-import { useListNamespaces } from "@/lib/orval/namespaces/namespaces"
-import { useListAccessKeys } from "@/lib/orval/access-keys/access-keys"
+import { apiClient } from "@/shared/api/http"
+
+interface DashboardStats {
+  namespaces: number
+  configs: number
+  access_keys: number
+}
 
 function StatCard({
   icon: Icon,
@@ -49,51 +55,57 @@ function StatCard({
 }
 
 export default function DashboardPage() {
-  const { data: nsRes } = useListNamespaces({ page: 1, page_size: 1 })
-  const { data: akRes } = useListAccessKeys({ page: 1, page_size: 1 })
-
-  const nsTotal = (nsRes?.data as { data?: { total: number } })?.data?.total ?? 0
-  const akTotal = (akRes?.data as { data?: { total: number } })?.data?.total ?? 0
+  const { data: stats } = useQuery({
+    queryKey: ["dashboard-stats"],
+    queryFn: async () => {
+      const response = await apiClient.get<{ data: DashboardStats }>(
+        "/api/v1/admin/system/dashboard-stats",
+      )
+      return response.data.data
+    },
+  })
 
   return (
     <div className="space-y-8">
-      <section className="relative overflow-hidden rounded-[28px] border border-indigo-500/15 bg-gradient-to-br from-indigo-600 via-violet-600 to-fuchsia-600 p-7 text-white shadow-2xl shadow-indigo-950/15 md:p-9">
-        <div className="absolute -right-16 -top-20 h-72 w-72 rounded-full bg-white/10 blur-3xl" />
-        <div className="absolute bottom-0 right-1/3 h-32 w-32 rounded-full bg-fuchsia-300/20 blur-3xl" />
+      <section className="relative overflow-hidden rounded-3xl border border-border/70 bg-card/85 p-7 shadow-sm backdrop-blur md:p-9">
+        <div className="absolute inset-y-0 left-0 w-1 bg-primary" />
+        <div className="absolute -right-20 -top-24 h-72 w-72 rounded-full bg-primary/[0.045]" />
         <div className="relative max-w-3xl">
-          <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-xs font-medium backdrop-blur">
-            <Sparkles className="h-3.5 w-3.5" />
-            Enterprise Configuration Platform
+          <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl border bg-primary/8 text-primary shadow-sm">
+            <CloudCog className="h-6 w-6" />
           </div>
-          <h1 className="text-3xl font-semibold tracking-tight md:text-4xl">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-primary">
+            Configuration workspace
+          </p>
+          <h1 className="text-3xl font-semibold tracking-tight text-foreground md:text-4xl">
             让每一次配置变更都清晰、可靠
           </h1>
-          <p className="mt-3 max-w-2xl text-sm leading-6 text-indigo-100 md:text-base">
+          <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground md:text-base">
             集中管理多环境配置、访问凭证和版本历史，让团队更安全地交付服务。
           </p>
           <div className="mt-6 flex flex-wrap gap-3">
             <Link
               to="/namespaces"
-              className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-indigo-700 shadow-lg transition hover:-translate-y-0.5 hover:shadow-xl"
+              className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-sm transition hover:-translate-y-0.5 hover:bg-primary/90 hover:shadow-md"
             >
               管理命名空间 <ArrowUpRight className="h-4 w-4" />
             </Link>
             <Link
               to="/access-keys"
-              className="inline-flex items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-4 py-2.5 text-sm font-medium text-white backdrop-blur transition hover:bg-white/15"
+              className="inline-flex items-center gap-2 rounded-xl border bg-background/70 px-4 py-2.5 text-sm font-medium text-foreground shadow-sm transition hover:bg-accent"
             >
               <ShieldCheck className="h-4 w-4" /> 查看访问密钥
             </Link>
           </div>
         </div>
-        <div className="absolute bottom-7 right-8 hidden rounded-2xl border border-white/15 bg-black/10 p-4 backdrop-blur lg:block">
+        <div className="absolute bottom-8 right-8 hidden rounded-2xl border bg-background/65 p-4 shadow-sm backdrop-blur lg:block">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-400/20">
-              <CircleCheck className="h-5 w-5 text-emerald-300" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/10">
+              <CircleCheck className="h-5 w-5 text-emerald-500" />
             </div>
             <div>
               <p className="text-sm font-semibold">系统运行正常</p>
-              <p className="text-xs text-indigo-100">All systems operational</p>
+              <p className="text-xs text-muted-foreground">All systems operational</p>
             </div>
           </div>
         </div>
@@ -111,9 +123,9 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard icon={FolderKanban} label="命名空间" value={nsTotal} sub="隔离不同业务和环境" accent="bg-indigo-500" />
-        <StatCard icon={FileCode2} label="配置项" value="—" sub="统一托管结构化配置" accent="bg-violet-500" />
-        <StatCard icon={KeyRound} label="访问密钥" value={akTotal} sub="精细控制 API 权限" accent="bg-amber-500" />
+        <StatCard icon={FolderKanban} label="命名空间" value={stats?.namespaces ?? "—"} sub="隔离不同业务和环境" accent="bg-indigo-500" />
+        <StatCard icon={FileCode2} label="配置项" value={stats?.configs ?? "—"} sub="统一托管结构化配置" accent="bg-violet-500" />
+        <StatCard icon={KeyRound} label="访问密钥" value={stats?.access_keys ?? "—"} sub="精细控制 API 权限" accent="bg-amber-500" />
         <StatCard icon={Zap} label="系统状态" value="健康" sub="服务与数据链路正常" accent="bg-emerald-500" />
       </div>
 

@@ -11,7 +11,6 @@ export default defineConfig(({ mode }) => {
     resolve: {
       alias: {
         '@': path.resolve(__dirname, './src'),
-        'monaco-editor/esm': path.resolve(__dirname, './node_modules/monaco-editor/esm'),
       },
     },
     server: {

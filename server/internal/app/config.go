@@ -25,6 +25,11 @@ func (uc *ConfigUsecase) ListByNamespaceID(ctx context.Context, nsID uint64) ([]
 	return list, domain.MapError(err)
 }
 
+func (uc *ConfigUsecase) Count(ctx context.Context) (int64, error) {
+	_, total, err := uc.store.Config.List(ctx, 0, 1)
+	return total, domain.MapError(err)
+}
+
 func (uc *ConfigUsecase) GetByID(ctx context.Context, id uint64) (*model.Config, error) {
 	cfg, err := uc.store.Config.GetByID(ctx, id)
 	if err != nil {
