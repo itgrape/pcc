@@ -2,6 +2,7 @@ package pccclient
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -23,7 +24,12 @@ func TestGetConfigSendsCredentialsAndDecodesResponse(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, err := New(server.URL, "pcc_ak_service", "pcc_sk_service", server.Client())
+	client, err := New(
+		server.URL,
+		"pcc_ak_service",
+		"pcc_sk_service",
+		WithHTTPClient(server.Client()),
+	)
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -33,5 +39,30 @@ func TestGetConfigSendsCredentialsAndDecodesResponse(t *testing.T) {
 	}
 	if config.Name != "database" || config.Version != 3 {
 		t.Fatalf("GetConfig() = %#v", config)
+	}
+}
+
+func TestGetConfigReturnsTypedHTTPError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, `{"code":403,"message":"forbidden"}`, http.StatusForbidden)
+	}))
+	defer server.Close()
+
+	client, err := New(
+		server.URL,
+		"pcc_ak_service",
+		"pcc_sk_service",
+		WithHTTPClient(server.Client()),
+	)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	_, err = client.GetConfig(context.Background(), "production", "database")
+	var httpErr *HTTPError
+	if !errors.As(err, &httpErr) {
+		t.Fatalf("GetConfig() error = %v, want HTTPError", err)
+	}
+	if httpErr.StatusCode != http.StatusForbidden {
+		t.Fatalf("HTTPError.StatusCode = %d", httpErr.StatusCode)
 	}
 }

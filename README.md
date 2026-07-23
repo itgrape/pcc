@@ -61,15 +61,48 @@ List every configuration visible to that key:
 GET /api/v1/runtime/namespaces/{namespace}/configs
 ```
 
-Go services can use `server/pkg/pccclient`:
+Go services can use the standalone module in `sdk/pcc-go-sdk`:
 
 ```go
-client, err := pccclient.New(pccURL, accessKey, secret, nil)
+import pccclient "github.com/itgrape/pcc/sdk/pcc-go-sdk"
+
+type ApplicationConfig struct {
+    Server struct {
+        Host    string        `json:"host" yaml:"host"`
+        Port    int           `json:"port" yaml:"port"`
+        Timeout time.Duration `json:"timeout" yaml:"timeout"`
+    } `json:"server" yaml:"server"`
+}
+
+client, err := pccclient.New(
+    pccURL,
+    accessKey,
+    secret,
+    pccclient.WithNamespace("production"),
+    pccclient.WithConfig("application"),
+    pccclient.WithTimeout(5*time.Second),
+)
 if err != nil {
     return err
 }
-config, err := client.GetConfig(ctx, "production", "database")
+
+var config ApplicationConfig
+if err := client.Load(&config); err != nil {
+    return err
+}
+
+var port int
+if err := client.LoadField("server.port", &port); err != nil {
+    return err
+}
 ```
+
+`Load` decodes the configured JSON, YAML, Properties, or Text document directly
+into a pointer. `LoadField` supports dotted paths and array indexes such as
+`features[0].enabled`. Services that select namespace and configuration at
+runtime can use `LoadConfig(ctx, namespace, name, &target)` and
+`LoadConfigField(ctx, namespace, name, path, &target)`. Raw metadata remains
+available through `GetConfig` and `ListConfigs`.
 
 Credentials are accepted only through request headers. Disabled keys, invalid
 secrets, and ungranted namespaces are rejected before configuration data is
