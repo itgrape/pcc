@@ -23,32 +23,39 @@ type RuntimeConfigProvider interface {
 	List(ctx context.Context, accessKey, secret, namespace string) ([]*model.Config, error)
 }
 
-type Deps struct {
-	Namespaces     *app.NamespaceUsecase
-	Configs        *app.ConfigUsecase
-	AccessKeys     *app.AccessKeyUsecase
+type AdminDeps struct {
+	Namespaces *app.NamespaceUsecase
+	Configs    *app.ConfigUsecase
+	AccessKeys *app.AccessKeyUsecase
+	Auth       Authenticator
+}
+
+type RuntimeDeps struct {
+	Configs RuntimeConfigProvider
+}
+
+type dependencies struct {
+	AdminDeps
 	RuntimeConfigs RuntimeConfigProvider
-	Auth           Authenticator
 }
 
 type handlers struct {
-	deps Deps
+	deps dependencies
 }
 
 const adminBasePath = "/api/v1/admin"
 
-func New(deps Deps) (*gin.Engine, error) {
-	if deps.Namespaces == nil || deps.Configs == nil || deps.AccessKeys == nil || deps.RuntimeConfigs == nil || deps.Auth == nil {
-		return nil, fmt.Errorf("httpapi: all dependencies are required")
+func NewAdmin(deps AdminDeps) (*gin.Engine, error) {
+	if deps.Namespaces == nil || deps.Configs == nil || deps.AccessKeys == nil || deps.Auth == nil {
+		return nil, fmt.Errorf("httpapi: all admin dependencies are required")
 	}
 
 	r := gin.Default()
-	h := &handlers{deps: deps}
+	h := &handlers{deps: dependencies{AdminDeps: deps}}
 	r.GET("/healthz", func(c *gin.Context) {
 		c.Status(204)
 	})
 	r.POST("/api/v1/auth/callback", h.exchangeOAuthCode)
-	h.registerRuntimeConfigRoutes(r)
 
 	cfg := huma.DefaultConfig("PCC Config Center", "1.0.0")
 	if cfg.Components.SecuritySchemes == nil {
@@ -71,6 +78,20 @@ func New(deps Deps) (*gin.Engine, error) {
 		return nil, err
 	}
 
+	return r, nil
+}
+
+func NewRuntime(deps RuntimeDeps) (*gin.Engine, error) {
+	if deps.Configs == nil {
+		return nil, fmt.Errorf("httpapi: runtime config provider is required")
+	}
+
+	r := gin.Default()
+	h := &handlers{deps: dependencies{RuntimeConfigs: deps.Configs}}
+	r.GET("/healthz", func(c *gin.Context) {
+		c.Status(204)
+	})
+	h.registerRuntimeConfigRoutes(r)
 	return r, nil
 }
 

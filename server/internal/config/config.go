@@ -17,7 +17,8 @@ type Config struct {
 }
 
 type ServerConfig struct {
-	Addr string
+	AdminAddr   string
+	RuntimeAddr string
 }
 
 type DBConfig struct {
@@ -44,7 +45,8 @@ func Load() (*Config, error) {
 
 	cfg := &Config{
 		Server: ServerConfig{
-			Addr: env("PCC_SERVER_ADDR", ":8080"),
+			AdminAddr:   env("PCC_ADMIN_ADDR", ":8080"),
+			RuntimeAddr: env("PCC_RUNTIME_ADDR", ":8081"),
 		},
 		DB: DBConfig{
 			DSN:             env("PCC_DB_DSN", ""),

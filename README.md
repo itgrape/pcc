@@ -33,11 +33,17 @@ PCC 是一个面向服务端应用的轻量配置中心，提供配置管理、�
 
 前端 Orval 客户端统一使用 `web/src/shared/api/http.ts` 中的 Axios 实例，不修改 Axios 全局默认值。
 
-## 鉴权边界
+## 鉴权与网络边界
 
-- `/healthz` 和 `POST /api/v1/auth/callback` 为公开引导接口。
+- 管理端监听 `PCC_ADMIN_ADDR`（默认 `:8080`），提供前端页面、
+  `POST /api/v1/auth/callback` 和 `/api/v1/admin/*`。
+- 服务端监听 `PCC_RUNTIME_ADDR`（默认 `:8081`），只提供
+  `/api/v1/runtime/*` 和健康检查。
+- 两个监听端口的路由相互隔离，管理端不注册 Runtime API，服务端也不
+  注册页面、OAuth 回调和管理 API。
 - `/api/v1/admin/*` 使用 Casdoor Bearer Token，并由后端统一鉴权。
-- `/api/v1/runtime/*` 使用 Access Key、Secret 和命名空间授权。
+- `/api/v1/runtime/*` 使用 Access Key、Secret 和命名空间授权，并且
+  生产环境只允许容器内网访问，不配置域名反向代理。
 - 前端路由守卫仅用于交互体验，不作为安全边界。
 - 后端回归测试会遍历管理接口，确保未登录请求返回 `401 Unauthorized`。
 
@@ -54,6 +60,8 @@ cp server/.env.example server/.env
 至少配置以下变量：
 
 ```dotenv
+PCC_ADMIN_ADDR=:8080
+PCC_RUNTIME_ADDR=:8081
 PCC_DB_DSN=user:pass@tcp(127.0.0.1:3306)/pcc?charset=utf8mb4&parseTime=true&loc=Local
 PCC_CASDOOR_ENDPOINT=https://door.example.com
 PCC_CASDOOR_CLIENT_ID=pcc-web
@@ -92,7 +100,7 @@ Vite 会将 `/api` 代理到 `VITE_API_PROXY_TARGET`。
 curl \
   -H 'X-PCC-Access-Key: pcc_ak_...' \
   -H 'X-PCC-Secret: pcc_sk_...' \
-  http://localhost:8080/api/v1/runtime/namespaces/production/configs/application
+  http://localhost:8081/api/v1/runtime/namespaces/production/configs/application
 ```
 
 列出命名空间下的配置：
@@ -166,7 +174,8 @@ Containerfile 使用 Node 和 Go 多阶段构建。最终镜像：
 - 前端固定放在 `/web`。
 - Go 服务自动检测 `/web/index.html` 并托管 SPA。
 - `/assets/*` 使用长期缓存，HTML 使用 `no-cache`。
-- 内置 `/healthz` 容器健康检查。
+- 管理端和服务端分别监听容器内的 `8080`、`8081` 端口。
+- 内置同时检查两个监听端口的容器健康检查。
 - 不在镜像中保存后端环境变量或密钥。
 
 手工构建：
@@ -187,7 +196,6 @@ podman build -f Containerfile -t pcc:latest \
 ### Gitea Variables
 
 - `PCC_DEPLOY_NAME`：可选，镜像名和容器名，默认 `pcc`。
-- `PCC_HOST_PORT`：可选，宿主机端口，默认 `8080`。
 - `PCC_CASDOOR_ENDPOINT`：必填，Casdoor 服务地址。
 - `PCC_CASDOOR_CLIENT_ID`：必填，Casdoor 客户端 ID。
 - `PCC_CASDOOR_ORGANIZATION`：必填，Casdoor 组织名。
@@ -204,14 +212,18 @@ Casdoor 的公开参数只配置一份：构建镜像时映射为前端的
 工作流通过当前进程环境将运行参数直接传给 Podman，不创建 `.env`
 文件或 Podman Secret，不在宿主机留下额外配置状态。
 
+部署容器加入已有的 Podman `internal` 网络，不向宿主机发布端口。Nginx
+应只反向代理 `${PCC_DEPLOY_NAME:-pcc}:8080`；同一内网中的服务通过
+`${PCC_DEPLOY_NAME:-pcc}:8081` 读取配置，不应为 `8081` 配置域名入口。
+
 ### 部署流程
 
 1. 检出代码并检查宿主机 Podman。
-2. 校验 Gitea Variables 和 Secrets。
+2. 校验 Gitea Variables、Secrets 和 `internal` Podman 网络。
 3. 将当前 `latest` 标记为 `rollback`。
 4. 构建带提交 SHA 标签的新镜像。
 5. 直接从工作流环境替换并启动容器。
-6. 等待 `/healthz` 变为健康状态。
+6. 在容器内等待管理端和服务端的 `/healthz` 变为健康状态。
 7. 成功后更新 `latest`；失败则输出日志并自动启动 `rollback`。
 8. 清理停止的容器、悬空层和旧的 PCC 镜像标签。
 

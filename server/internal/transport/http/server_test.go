@@ -54,12 +54,11 @@ func (acceptingAuthenticator) Authenticate(authHeader string) (*domain.Identity,
 
 func TestAdminRoutesRequireAuthentication(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	router, err := New(Deps{
-		Namespaces:     new(app.NamespaceUsecase),
-		Configs:        new(app.ConfigUsecase),
-		AccessKeys:     new(app.AccessKeyUsecase),
-		RuntimeConfigs: new(app.RuntimeConfigUsecase),
-		Auth:           rejectingAuthenticator{},
+	router, err := NewAdmin(AdminDeps{
+		Namespaces: new(app.NamespaceUsecase),
+		Configs:    new(app.ConfigUsecase),
+		AccessKeys: new(app.AccessKeyUsecase),
+		Auth:       rejectingAuthenticator{},
 	})
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
@@ -95,12 +94,11 @@ func TestAdminRoutesRequireAuthentication(t *testing.T) {
 
 func TestOAuthCallbackIsPublic(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	router, err := New(Deps{
-		Namespaces:     new(app.NamespaceUsecase),
-		Configs:        new(app.ConfigUsecase),
-		AccessKeys:     new(app.AccessKeyUsecase),
-		RuntimeConfigs: new(app.RuntimeConfigUsecase),
-		Auth:           rejectingAuthenticator{},
+	router, err := NewAdmin(AdminDeps{
+		Namespaces: new(app.NamespaceUsecase),
+		Configs:    new(app.ConfigUsecase),
+		AccessKeys: new(app.AccessKeyUsecase),
+		Auth:       rejectingAuthenticator{},
 	})
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
@@ -118,12 +116,11 @@ func TestOAuthCallbackIsPublic(t *testing.T) {
 
 func TestDocumentationRoutesRequireAuthentication(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	router, err := New(Deps{
-		Namespaces:     new(app.NamespaceUsecase),
-		Configs:        new(app.ConfigUsecase),
-		AccessKeys:     new(app.AccessKeyUsecase),
-		RuntimeConfigs: new(app.RuntimeConfigUsecase),
-		Auth:           rejectingAuthenticator{},
+	router, err := NewAdmin(AdminDeps{
+		Namespaces: new(app.NamespaceUsecase),
+		Configs:    new(app.ConfigUsecase),
+		AccessKeys: new(app.AccessKeyUsecase),
+		Auth:       rejectingAuthenticator{},
 	})
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
@@ -142,12 +139,11 @@ func TestDocumentationRoutesRequireAuthentication(t *testing.T) {
 
 func TestAuthenticatedUserIsInjectedIntoRequestContext(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	router, err := New(Deps{
-		Namespaces:     new(app.NamespaceUsecase),
-		Configs:        new(app.ConfigUsecase),
-		AccessKeys:     new(app.AccessKeyUsecase),
-		RuntimeConfigs: new(app.RuntimeConfigUsecase),
-		Auth:           acceptingAuthenticator{},
+	router, err := NewAdmin(AdminDeps{
+		Namespaces: new(app.NamespaceUsecase),
+		Configs:    new(app.ConfigUsecase),
+		AccessKeys: new(app.AccessKeyUsecase),
+		Auth:       acceptingAuthenticator{},
 	})
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
@@ -178,12 +174,8 @@ func TestRuntimeConfigUsesAccessKeyCredentials(t *testing.T) {
 		Format:     model.ConfigFormatJSON,
 		Content:    `{"host":"db.internal"}`,
 	}
-	router, err := New(Deps{
-		Namespaces:     new(app.NamespaceUsecase),
-		Configs:        new(app.ConfigUsecase),
-		AccessKeys:     new(app.AccessKeyUsecase),
-		RuntimeConfigs: runtimeConfigProviderFake{config: config},
-		Auth:           rejectingAuthenticator{},
+	router, err := NewRuntime(RuntimeDeps{
+		Configs: runtimeConfigProviderFake{config: config},
 	})
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
@@ -210,5 +202,38 @@ func TestRuntimeConfigUsesAccessKeyCredentials(t *testing.T) {
 	}
 	if authorizedRecorder.Header().Get("ETag") != `"30-4"` {
 		t.Fatalf("ETag = %q, want %q", authorizedRecorder.Header().Get("ETag"), `"30-4"`)
+	}
+}
+
+func TestAdminAndRuntimeRoutesAreIsolated(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	adminRouter, err := NewAdmin(AdminDeps{
+		Namespaces: new(app.NamespaceUsecase),
+		Configs:    new(app.ConfigUsecase),
+		AccessKeys: new(app.AccessKeyUsecase),
+		Auth:       rejectingAuthenticator{},
+	})
+	if err != nil {
+		t.Fatalf("NewAdmin() error = %v", err)
+	}
+	runtimeRouter, err := NewRuntime(RuntimeDeps{
+		Configs: new(app.RuntimeConfigUsecase),
+	})
+	if err != nil {
+		t.Fatalf("NewRuntime() error = %v", err)
+	}
+
+	assertRouteNotFound(t, adminRouter, runtimeBasePath+"/namespaces/production/configs")
+	assertRouteNotFound(t, runtimeRouter, adminBasePath+"/user/info")
+	assertRouteNotFound(t, runtimeRouter, "/api/v1/auth/callback")
+}
+
+func assertRouteNotFound(t *testing.T, router http.Handler, path string) {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodGet, path, nil)
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, req)
+	if recorder.Code != http.StatusNotFound {
+		t.Fatalf("GET %s returned %d, want %d", path, recorder.Code, http.StatusNotFound)
 	}
 }

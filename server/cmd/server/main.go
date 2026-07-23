@@ -4,6 +4,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -63,44 +64,66 @@ func run() error {
 		store.Config,
 	)
 
-	r, err := httpapi.New(httpapi.Deps{
-		Namespaces:     nsUsecase,
-		Configs:        cfgUsecase,
-		AccessKeys:     akUsecase,
-		RuntimeConfigs: runtimeConfigUsecase,
-		Auth:           auth,
+	adminRouter, err := httpapi.NewAdmin(httpapi.AdminDeps{
+		Namespaces: nsUsecase,
+		Configs:    cfgUsecase,
+		AccessKeys: akUsecase,
+		Auth:       auth,
+	})
+	if err != nil {
+		return err
+	}
+	runtimeRouter, err := httpapi.NewRuntime(httpapi.RuntimeDeps{
+		Configs: runtimeConfigUsecase,
 	})
 	if err != nil {
 		return err
 	}
 
-	srv := &http.Server{
-		Addr:              cfg.Server.Addr,
-		Handler:           r,
+	servers := map[string]*http.Server{
+		"admin":   newHTTPServer(cfg.Server.AdminAddr, adminRouter),
+		"runtime": newHTTPServer(cfg.Server.RuntimeAddr, runtimeRouter),
+	}
+	errCh := make(chan error, len(servers))
+	for name, srv := range servers {
+		go serve(name, srv, errCh)
+	}
+
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
+	var runErr error
+	select {
+	case runErr = <-errCh:
+	case <-stop:
+		slog.Info("shutting down")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	var shutdownErr error
+	for name, srv := range servers {
+		if err := srv.Shutdown(ctx); err != nil {
+			shutdownErr = errors.Join(shutdownErr, fmt.Errorf("shutdown %s server: %w", name, err))
+		}
+	}
+	return errors.Join(runErr, shutdownErr)
+}
+
+func newHTTPServer(addr string, handler http.Handler) *http.Server {
+	return &http.Server{
+		Addr:              addr,
+		Handler:           handler,
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      30 * time.Second,
 		IdleTimeout:       60 * time.Second,
 		MaxHeaderBytes:    1 << 20,
 	}
+}
 
-	errCh := make(chan error, 1)
-	go func() {
-		slog.Info("http server listening", "addr", cfg.Server.Addr)
-		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			errCh <- err
-		}
-	}()
-
-	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
-	select {
-	case err := <-errCh:
-		return err
-	case <-stop:
-		slog.Info("shutting down")
-		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-		defer cancel()
-		return srv.Shutdown(ctx)
+func serve(name string, srv *http.Server, errCh chan<- error) {
+	slog.Info("http server listening", "name", name, "addr", srv.Addr)
+	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		errCh <- fmt.Errorf("%s server: %w", name, err)
 	}
 }

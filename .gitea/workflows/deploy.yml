@@ -15,7 +15,6 @@ jobs:
     runs-on: debian-latest
     env:
       PCC_DEPLOY_NAME: ${{ vars.PCC_DEPLOY_NAME }}
-      PCC_HOST_PORT: ${{ vars.PCC_HOST_PORT }}
       PCC_DB_DSN: ${{ secrets.PCC_DB_DSN }}
       PCC_CASDOOR_ENDPOINT: ${{ vars.PCC_CASDOOR_ENDPOINT }}
       PCC_CASDOOR_CLIENT_ID: ${{ vars.PCC_CASDOOR_CLIENT_ID }}
@@ -42,6 +41,10 @@ jobs:
           : "${PCC_CASDOOR_CLIENT_SECRET:?请配置 Gitea Secret: PCC_CASDOOR_CLIENT_SECRET}"
           : "${PCC_CASDOOR_ORGANIZATION:?请配置 Gitea Variable: PCC_CASDOOR_ORGANIZATION}"
           : "${PCC_CASDOOR_APPLICATION:?请配置 Gitea Variable: PCC_CASDOOR_APPLICATION}"
+          podman network exists internal || {
+            echo "Podman 网络 internal 不存在" >&2
+            exit 1
+          }
 
       - name: Build image
         shell: bash
@@ -74,7 +77,6 @@ jobs:
 
           image_name="${PCC_DEPLOY_NAME:-pcc}"
           container_name="${PCC_DEPLOY_NAME:-pcc}"
-          host_port="${PCC_HOST_PORT:-8080}"
           image_tag="${COMMIT_SHA:0:12}"
 
           start_container() {
@@ -84,7 +86,7 @@ jobs:
               --detach \
               --name "${container_name}" \
               --restart unless-stopped \
-              --publish "${host_port}:8080" \
+              --network internal \
               --env PCC_DB_DSN \
               --env PCC_CASDOOR_ENDPOINT \
               --env PCC_CASDOOR_CLIENT_ID \
@@ -98,7 +100,8 @@ jobs:
           wait_for_health() {
             for _ in $(seq 1 30); do
               if podman exec "${container_name}" \
-                wget -q -O /dev/null http://127.0.0.1:8080/healthz 2>/dev/null; then
+                sh -c 'wget -q -O /dev/null http://127.0.0.1:8080/healthz &&
+                  wget -q -O /dev/null http://127.0.0.1:8081/healthz' 2>/dev/null; then
                 return 0
               fi
               if [[ "$(podman inspect --format '{{.State.Running}}' "${container_name}" 2>/dev/null || true)" != "true" ]]; then
@@ -112,7 +115,7 @@ jobs:
           start_container "${image_name}:${image_tag}"
           if wait_for_health; then
             podman tag "${image_name}:${image_tag}" "${image_name}:latest"
-            echo "部署成功：http://127.0.0.1:${host_port}"
+            echo "部署成功：${container_name}:8080（管理端），${container_name}:8081（服务端）"
             exit 0
           fi
 
