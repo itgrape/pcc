@@ -144,7 +144,6 @@ jobs:
           image_name="${PCC_DEPLOY_NAME:-pcc}"
           image_tag="${COMMIT_SHA:0:12}"
 
-          podman container prune --force >/dev/null
           podman image prune --force >/dev/null
 
           podman images \
