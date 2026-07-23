@@ -44,6 +44,9 @@ func New(deps Deps) (*gin.Engine, error) {
 
 	r := gin.Default()
 	h := &handlers{deps: deps}
+	r.GET("/healthz", func(c *gin.Context) {
+		c.Status(204)
+	})
 	r.POST("/api/v1/auth/callback", h.exchangeOAuthCode)
 	h.registerRuntimeConfigRoutes(r)
 
@@ -64,6 +67,9 @@ func New(deps Deps) (*gin.Engine, error) {
 	protected.Use(AuthMiddleware(deps.Auth.Authenticate))
 	api := humagin.NewWithGroup(r, protected, cfg)
 	h.register(api)
+	if err := registerSPA(r); err != nil {
+		return nil, err
+	}
 
 	return r, nil
 }

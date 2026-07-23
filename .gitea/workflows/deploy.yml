@@ -1,0 +1,158 @@
+name: Build and deploy PCC
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: pcc-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: debian-latest
+    env:
+      PCC_DEPLOY_NAME: ${{ vars.PCC_DEPLOY_NAME }}
+      PCC_HOST_PORT: ${{ vars.PCC_HOST_PORT }}
+      PCC_DB_DSN: ${{ secrets.PCC_DB_DSN }}
+      PCC_CASDOOR_ENDPOINT: ${{ vars.PCC_CASDOOR_ENDPOINT }}
+      PCC_CASDOOR_CLIENT_ID: ${{ vars.PCC_CASDOOR_CLIENT_ID }}
+      PCC_CASDOOR_CLIENT_SECRET: ${{ secrets.PCC_CASDOOR_CLIENT_SECRET }}
+      PCC_CASDOOR_ORGANIZATION: ${{ vars.PCC_CASDOOR_ORGANIZATION }}
+      PCC_CASDOOR_APPLICATION: ${{ vars.PCC_CASDOOR_APPLICATION }}
+      PCC_SNOWFLAKE_NODE_ID: ${{ vars.PCC_SNOWFLAKE_NODE_ID }}
+      COMMIT_SHA: ${{ github.sha }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check Podman
+        run: podman version
+
+      - name: Validate configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${PCC_DB_DSN:?请配置 Gitea Secret: PCC_DB_DSN}"
+          : "${PCC_CASDOOR_ENDPOINT:?请配置 Gitea Variable: PCC_CASDOOR_ENDPOINT}"
+          : "${PCC_CASDOOR_CLIENT_ID:?请配置 Gitea Variable: PCC_CASDOOR_CLIENT_ID}"
+          : "${PCC_CASDOOR_CLIENT_SECRET:?请配置 Gitea Secret: PCC_CASDOOR_CLIENT_SECRET}"
+          : "${PCC_CASDOOR_ORGANIZATION:?请配置 Gitea Variable: PCC_CASDOOR_ORGANIZATION}"
+          : "${PCC_CASDOOR_APPLICATION:?请配置 Gitea Variable: PCC_CASDOOR_APPLICATION}"
+
+      - name: Build image
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          image_name="${PCC_DEPLOY_NAME:-pcc}"
+          image_tag="${COMMIT_SHA:0:12}"
+
+          if podman image exists "${image_name}:latest"; then
+            podman tag "${image_name}:latest" "${image_name}:rollback"
+          fi
+
+          podman build \
+            --file Containerfile \
+            --tag "${image_name}:${image_tag}" \
+            --build-arg "PCC_CASDOOR_ENDPOINT=${PCC_CASDOOR_ENDPOINT}" \
+            --build-arg "PCC_CASDOOR_CLIENT_ID=${PCC_CASDOOR_CLIENT_ID}" \
+            --build-arg "PCC_CASDOOR_APPLICATION=${PCC_CASDOOR_APPLICATION}" \
+            --build-arg "PCC_CASDOOR_ORGANIZATION=${PCC_CASDOOR_ORGANIZATION}" \
+            .
+
+          podman image inspect "${image_name}:${image_tag}" >/dev/null
+          echo "已构建 ${image_name}:${image_tag}"
+
+      - name: Run and health check
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          image_name="${PCC_DEPLOY_NAME:-pcc}"
+          container_name="${PCC_DEPLOY_NAME:-pcc}"
+          host_port="${PCC_HOST_PORT:-8080}"
+          image_tag="${COMMIT_SHA:0:12}"
+
+          start_container() {
+            local image="$1"
+            podman rm --force "${container_name}" >/dev/null 2>&1 || true
+            podman run \
+              --detach \
+              --name "${container_name}" \
+              --restart unless-stopped \
+              --publish "${host_port}:8080" \
+              --env PCC_DB_DSN \
+              --env PCC_CASDOOR_ENDPOINT \
+              --env PCC_CASDOOR_CLIENT_ID \
+              --env PCC_CASDOOR_CLIENT_SECRET \
+              --env PCC_CASDOOR_ORGANIZATION \
+              --env PCC_CASDOOR_APPLICATION \
+              --env PCC_SNOWFLAKE_NODE_ID \
+              "${image}" >/dev/null
+          }
+
+          wait_for_health() {
+            for _ in $(seq 1 30); do
+              if podman exec "${container_name}" \
+                wget -q -O /dev/null http://127.0.0.1:8080/healthz 2>/dev/null; then
+                return 0
+              fi
+              if [[ "$(podman inspect --format '{{.State.Running}}' "${container_name}" 2>/dev/null || true)" != "true" ]]; then
+                return 1
+              fi
+              sleep 2
+            done
+            return 1
+          }
+
+          start_container "${image_name}:${image_tag}"
+          if wait_for_health; then
+            podman tag "${image_name}:${image_tag}" "${image_name}:latest"
+            echo "部署成功：http://127.0.0.1:${host_port}"
+            exit 0
+          fi
+
+          echo "新版本健康检查失败" >&2
+          podman logs "${container_name}" >&2 || true
+          podman rm --force "${container_name}" >/dev/null 2>&1 || true
+
+          if podman image exists "${image_name}:rollback"; then
+            echo "正在回滚到上一版本" >&2
+            start_container "${image_name}:rollback"
+            if ! wait_for_health; then
+              podman logs "${container_name}" >&2 || true
+              echo "回滚版本也未通过健康检查" >&2
+            fi
+          else
+            echo "不存在可回滚镜像" >&2
+          fi
+          exit 1
+
+      - name: Clean old resources
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          image_name="${PCC_DEPLOY_NAME:-pcc}"
+          image_tag="${COMMIT_SHA:0:12}"
+
+          podman container prune --force >/dev/null
+          podman image prune --force >/dev/null
+
+          podman images \
+            --filter "reference=${image_name}:*" \
+            --format '{{.Repository}}:{{.Tag}}' |
+          while read -r image; do
+            case "${image}" in
+              "${image_name}:${image_tag}"|"${image_name}:latest"|"${image_name}:rollback")
+                ;;
+              *)
+                podman rmi "${image}" >/dev/null 2>&1 || true
+                ;;
+            esac
+          done

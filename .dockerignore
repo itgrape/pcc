@@ -1,0 +1,13 @@
+.git
+.gitignore
+.cursor
+.idea
+.vscode
+**/.env
+**/.env.*
+!**/.env.example
+**/node_modules
+**/dist
+**/coverage
+**/*.log
+server/pcc-server
