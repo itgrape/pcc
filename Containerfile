@@ -23,7 +23,7 @@ FROM golang:1.25.5-alpine AS server-builder
 WORKDIR /src/server
 
 COPY server/go.mod server/go.sum ./
-RUN go mod download
+RUN go env -w GOPROXY=https://goproxy.cn,direct && go mod download
 
 COPY server/ ./
 RUN CGO_ENABLED=0 GOOS=linux go build \
