@@ -3,7 +3,7 @@ FROM node:22-alpine AS web-builder
 WORKDIR /src/web
 
 COPY web/package.json web/package-lock.json ./
-RUN npm config set registry https://registry.npmmirror.com && npm ci --include=optional
+RUN npm config set registry http://mirrors.cloud.tencent.com/npm/ && npm ci --include=optional
 
 COPY web/ ./
 
