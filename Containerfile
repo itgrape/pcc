@@ -32,24 +32,15 @@ RUN CGO_ENABLED=0 GOOS=linux go build \
     -o /out/pcc-server \
     ./cmd/server
 
-FROM alpine:3.22
+FROM gcr.io/distroless/static-debian12:nonroot
 
-RUN apk add --no-cache ca-certificates tzdata \
-    && addgroup -S pcc \
-    && adduser -S -G pcc pcc
+WORKDIR /
 
-WORKDIR /app
-
-COPY --from=server-builder /out/pcc-server /usr/local/bin/pcc-server
+COPY --from=server-builder /out/pcc-server /server
 COPY --from=web-builder /src/web/dist /web
 
 EXPOSE 8080 8081
 
-USER pcc
+USER nonroot:nonroot
 
-HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
-    CMD wget -q -O /dev/null http://127.0.0.1:8080/healthz \
-        && wget -q -O /dev/null http://127.0.0.1:8081/healthz \
-        || exit 1
-
-ENTRYPOINT ["/usr/local/bin/pcc-server"]
+ENTRYPOINT ["/server"]

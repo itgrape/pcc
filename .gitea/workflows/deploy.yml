@@ -22,7 +22,6 @@ jobs:
       PCC_CASDOOR_ORGANIZATION: ${{ vars.PCC_CASDOOR_ORGANIZATION }}
       PCC_CASDOOR_APPLICATION: ${{ vars.PCC_CASDOOR_APPLICATION }}
       PCC_SNOWFLAKE_NODE_ID: ${{ vars.PCC_SNOWFLAKE_NODE_ID }}
-      COMMIT_SHA: ${{ github.sha }}
 
     steps:
       - name: Checkout
@@ -46,42 +45,67 @@ jobs:
             exit 1
           }
 
-      - name: Build image
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          image_name="${PCC_DEPLOY_NAME:-pcc}"
-          image_tag="${COMMIT_SHA:0:12}"
-
-          if podman image exists "${image_name}:latest"; then
-            podman tag "${image_name}:latest" "${image_name}:rollback"
-          fi
-
-          podman build \
-            --file Containerfile \
-            --tag "${image_name}:${image_tag}" \
-            --build-arg "PCC_CASDOOR_ENDPOINT=${PCC_CASDOOR_ENDPOINT}" \
-            --build-arg "PCC_CASDOOR_CLIENT_ID=${PCC_CASDOOR_CLIENT_ID}" \
-            --build-arg "PCC_CASDOOR_APPLICATION=${PCC_CASDOOR_APPLICATION}" \
-            --build-arg "PCC_CASDOOR_ORGANIZATION=${PCC_CASDOOR_ORGANIZATION}" \
-            .
-
-          podman image inspect "${image_name}:${image_tag}" >/dev/null
-          echo "已构建 ${image_name}:${image_tag}"
-
-      - name: Run and health check
+      - name: Build and deploy
         shell: bash
         run: |
           set -euo pipefail
 
           image_name="${PCC_DEPLOY_NAME:-pcc}"
           container_name="${PCC_DEPLOY_NAME:-pcc}"
-          image_tag="${COMMIT_SHA:0:12}"
 
-          start_container() {
-            local image="$1"
-            podman rm --force "${container_name}" >/dev/null 2>&1 || true
+          # 将当前 latest 标记为 rollback
+          podman rmi "${image_name}:rollback" >/dev/null 2>&1 || true
+          if podman image exists "${image_name}:latest"; then
+            podman tag "${image_name}:latest" "${image_name}:rollback"
+          fi
+
+          # 构建新镜像
+          podman build \
+            --file Containerfile \
+            --tag "${image_name}:latest" \
+            --build-arg "PCC_CASDOOR_ENDPOINT=${PCC_CASDOOR_ENDPOINT}" \
+            --build-arg "PCC_CASDOOR_CLIENT_ID=${PCC_CASDOOR_CLIENT_ID}" \
+            --build-arg "PCC_CASDOOR_APPLICATION=${PCC_CASDOOR_APPLICATION}" \
+            --build-arg "PCC_CASDOOR_ORGANIZATION=${PCC_CASDOOR_ORGANIZATION}" \
+            .
+
+          # 停旧容器，启新容器
+          podman rm --force "${container_name}" >/dev/null 2>&1 || true
+          podman run \
+            --detach \
+            --name "${container_name}" \
+            --restart unless-stopped \
+            --network internal \
+            --env PCC_DB_DSN \
+            --env PCC_CASDOOR_ENDPOINT \
+            --env PCC_CASDOOR_CLIENT_ID \
+            --env PCC_CASDOOR_CLIENT_SECRET \
+            --env PCC_CASDOOR_ORGANIZATION \
+            --env PCC_CASDOOR_APPLICATION \
+            --env PCC_SNOWFLAKE_NODE_ID \
+            "${image_name}:latest"
+
+          # 健康检查（用宿主机 curl，distroless 里没有 shell/wget）
+          for i in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:8080/healthz >/dev/null 2>&1 && \
+               curl -sf http://127.0.0.1:8081/healthz >/dev/null 2>&1; then
+              echo "部署成功：${container_name}:8080（管理端），${container_name}:8081（服务端）"
+              exit 0
+            fi
+            if [[ "$(podman inspect --format '{{.State.Running}}' "${container_name}" 2>/dev/null || true)" != "true" ]]; then
+              echo "容器已退出" >&2
+              podman logs "${container_name}" >&2 || true
+              break
+            fi
+            sleep 2
+          done
+
+          # 健康检查失败 → 回滚
+          echo "新版本健康检查失败" >&2
+          podman rm --force "${container_name}" >/dev/null 2>&1 || true
+
+          if podman image exists "${image_name}:rollback"; then
+            echo "正在回滚到上一版本" >&2
             podman run \
               --detach \
               --name "${container_name}" \
@@ -94,67 +118,23 @@ jobs:
               --env PCC_CASDOOR_ORGANIZATION \
               --env PCC_CASDOOR_APPLICATION \
               --env PCC_SNOWFLAKE_NODE_ID \
-              "${image}" >/dev/null
-          }
-
-          wait_for_health() {
-            for _ in $(seq 1 30); do
-              if podman exec "${container_name}" \
-                sh -c 'wget -q -O /dev/null http://127.0.0.1:8080/healthz &&
-                  wget -q -O /dev/null http://127.0.0.1:8081/healthz' 2>/dev/null; then
-                return 0
-              fi
-              if [[ "$(podman inspect --format '{{.State.Running}}' "${container_name}" 2>/dev/null || true)" != "true" ]]; then
-                return 1
-              fi
-              sleep 2
-            done
-            return 1
-          }
-
-          start_container "${image_name}:${image_tag}"
-          if wait_for_health; then
-            podman tag "${image_name}:${image_tag}" "${image_name}:latest"
-            echo "部署成功：${container_name}:8080（管理端），${container_name}:8081（服务端）"
-            exit 0
-          fi
-
-          echo "新版本健康检查失败" >&2
-          podman logs "${container_name}" >&2 || true
-          podman rm --force "${container_name}" >/dev/null 2>&1 || true
-
-          if podman image exists "${image_name}:rollback"; then
-            echo "正在回滚到上一版本" >&2
-            start_container "${image_name}:rollback"
-            if ! wait_for_health; then
-              podman logs "${container_name}" >&2 || true
-              echo "回滚版本也未通过健康检查" >&2
-            fi
+              "${image_name}:rollback"
+            echo "已回滚到上一版本"
           else
             echo "不存在可回滚镜像" >&2
           fi
           exit 1
 
-      - name: Clean old resources
+      - name: Clean old images
         if: always()
         shell: bash
         run: |
-          set -euo pipefail
-
           image_name="${PCC_DEPLOY_NAME:-pcc}"
-          image_tag="${COMMIT_SHA:0:12}"
-
           podman image prune --force >/dev/null
-
-          podman images \
-            --filter "reference=${image_name}:*" \
-            --format '{{.Repository}}:{{.Tag}}' |
+          podman images --filter "reference=${image_name}:*" --format '{{.Repository}}:{{.Tag}}' |
           while read -r image; do
             case "${image}" in
-              "${image_name}:${image_tag}"|"${image_name}:latest"|"${image_name}:rollback")
-                ;;
-              *)
-                podman rmi "${image}" >/dev/null 2>&1 || true
-                ;;
+              "${image_name}:latest"|"${image_name}:rollback") ;;
+              *) podman rmi "${image}" >/dev/null 2>&1 || true ;;
             esac
           done
