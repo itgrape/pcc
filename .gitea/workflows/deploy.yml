@@ -69,6 +69,10 @@ jobs:
             --build-arg "PCC_CASDOOR_ORGANIZATION=${PCC_CASDOOR_ORGANIZATION}" \
             .
 
+          # 宿主机映射端口（避免冲突用大端口）
+          host_port_admin=18080
+          host_port_server=18081
+
           # 停旧容器，启新容器
           podman rm --force "${container_name}" >/dev/null 2>&1 || true
           podman run \
@@ -76,6 +80,8 @@ jobs:
             --name "${container_name}" \
             --restart unless-stopped \
             --network internal \
+            -p "${host_port_admin}:8080" \
+            -p "${host_port_server}:8081" \
             --env PCC_DB_DSN \
             --env PCC_CASDOOR_ENDPOINT \
             --env PCC_CASDOOR_CLIENT_ID \
@@ -87,8 +93,8 @@ jobs:
 
           # 健康检查（用宿主机 curl，distroless 里没有 shell/wget）
           for i in $(seq 1 30); do
-            if curl -sf http://127.0.0.1:8080/healthz >/dev/null 2>&1 && \
-               curl -sf http://127.0.0.1:8081/healthz >/dev/null 2>&1; then
+            if curl -sf "http://127.0.0.1:${host_port_admin}/healthz" >/dev/null 2>&1 && \
+               curl -sf "http://127.0.0.1:${host_port_server}/healthz" >/dev/null 2>&1; then
               echo "部署成功：${container_name}:8080（管理端），${container_name}:8081（服务端）"
               exit 0
             fi
@@ -111,6 +117,8 @@ jobs:
               --name "${container_name}" \
               --restart unless-stopped \
               --network internal \
+              -p "${host_port_admin}:8080" \
+              -p "${host_port_server}:8081" \
               --env PCC_DB_DSN \
               --env PCC_CASDOOR_ENDPOINT \
               --env PCC_CASDOOR_CLIENT_ID \
