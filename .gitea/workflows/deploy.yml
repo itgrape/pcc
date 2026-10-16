@@ -16,11 +16,8 @@ jobs:
     env:
       PCC_DEPLOY_NAME: ${{ vars.PCC_DEPLOY_NAME }}
       PCC_DB_DSN: ${{ secrets.PCC_DB_DSN }}
-      PCC_CASDOOR_ENDPOINT: ${{ vars.PCC_CASDOOR_ENDPOINT }}
-      PCC_CASDOOR_CLIENT_ID: ${{ vars.PCC_CASDOOR_CLIENT_ID }}
-      PCC_CASDOOR_CLIENT_SECRET: ${{ secrets.PCC_CASDOOR_CLIENT_SECRET }}
-      PCC_CASDOOR_ORGANIZATION: ${{ vars.PCC_CASDOOR_ORGANIZATION }}
-      PCC_CASDOOR_APPLICATION: ${{ vars.PCC_CASDOOR_APPLICATION }}
+      PCC_ADMIN_USERNAME: ${{ secrets.PCC_ADMIN_USERNAME }}
+      PCC_ADMIN_PASSWORD: ${{ secrets.PCC_ADMIN_PASSWORD }}
       PCC_SNOWFLAKE_NODE_ID: ${{ vars.PCC_SNOWFLAKE_NODE_ID }}
 
     steps:
@@ -35,11 +32,9 @@ jobs:
         run: |
           set -euo pipefail
           : "${PCC_DB_DSN:?请配置 Gitea Secret: PCC_DB_DSN}"
-          : "${PCC_CASDOOR_ENDPOINT:?请配置 Gitea Variable: PCC_CASDOOR_ENDPOINT}"
-          : "${PCC_CASDOOR_CLIENT_ID:?请配置 Gitea Variable: PCC_CASDOOR_CLIENT_ID}"
-          : "${PCC_CASDOOR_CLIENT_SECRET:?请配置 Gitea Secret: PCC_CASDOOR_CLIENT_SECRET}"
-          : "${PCC_CASDOOR_ORGANIZATION:?请配置 Gitea Variable: PCC_CASDOOR_ORGANIZATION}"
-          : "${PCC_CASDOOR_APPLICATION:?请配置 Gitea Variable: PCC_CASDOOR_APPLICATION}"
+          : "${PCC_ADMIN_USERNAME:?请配置 Gitea Secret: PCC_ADMIN_USERNAME}"
+          : "${PCC_ADMIN_PASSWORD:?请配置 Gitea Secret: PCC_ADMIN_PASSWORD}"
+          if (( ${#PCC_ADMIN_PASSWORD} < 16 )); then echo "PCC_ADMIN_PASSWORD 至少需要 16 个字符" >&2; exit 1; fi
           podman network exists internal || {
             echo "Podman 网络 internal 不存在" >&2
             exit 1
@@ -63,10 +58,6 @@ jobs:
           podman build \
             --file Containerfile \
             --tag "${image_name}:latest" \
-            --build-arg "PCC_CASDOOR_ENDPOINT=${PCC_CASDOOR_ENDPOINT}" \
-            --build-arg "PCC_CASDOOR_CLIENT_ID=${PCC_CASDOOR_CLIENT_ID}" \
-            --build-arg "PCC_CASDOOR_APPLICATION=${PCC_CASDOOR_APPLICATION}" \
-            --build-arg "PCC_CASDOOR_ORGANIZATION=${PCC_CASDOOR_ORGANIZATION}" \
             .
 
           # 宿主机映射端口（避免冲突用大端口）
@@ -83,11 +74,8 @@ jobs:
             -p "${host_port_admin}:8080" \
             -p "${host_port_server}:8081" \
             --env PCC_DB_DSN \
-            --env PCC_CASDOOR_ENDPOINT \
-            --env PCC_CASDOOR_CLIENT_ID \
-            --env PCC_CASDOOR_CLIENT_SECRET \
-            --env PCC_CASDOOR_ORGANIZATION \
-            --env PCC_CASDOOR_APPLICATION \
+            --env PCC_ADMIN_USERNAME \
+            --env PCC_ADMIN_PASSWORD \
             --env PCC_SNOWFLAKE_NODE_ID \
             "${image_name}:latest"
 
@@ -120,11 +108,8 @@ jobs:
               -p "${host_port_admin}:8080" \
               -p "${host_port_server}:8081" \
               --env PCC_DB_DSN \
-              --env PCC_CASDOOR_ENDPOINT \
-              --env PCC_CASDOOR_CLIENT_ID \
-              --env PCC_CASDOOR_CLIENT_SECRET \
-              --env PCC_CASDOOR_ORGANIZATION \
-              --env PCC_CASDOOR_APPLICATION \
+              --env PCC_ADMIN_USERNAME \
+              --env PCC_ADMIN_PASSWORD \
               --env PCC_SNOWFLAKE_NODE_ID \
               "${image_name}:rollback"
             echo "已回滚到上一版本"

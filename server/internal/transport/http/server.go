@@ -14,8 +14,10 @@ import (
 )
 
 type Authenticator interface {
-	ExchangeCode(code, state string) (string, error)
-	Authenticate(authHeader string) (*domain.Identity, error)
+	Login(username, password string) (string, error)
+	Authenticate(token string) (*domain.Identity, error)
+	Logout(token string)
+	SecureCookie() bool
 }
 
 type RuntimeConfigProvider interface {
@@ -40,7 +42,8 @@ type dependencies struct {
 }
 
 type handlers struct {
-	deps dependencies
+	deps    dependencies
+	limiter loginLimiter
 }
 
 const adminBasePath = "/api/v1/admin"
@@ -51,27 +54,31 @@ func NewAdmin(deps AdminDeps) (*gin.Engine, error) {
 	}
 
 	r := gin.Default()
-	h := &handlers{deps: dependencies{AdminDeps: deps}}
+	h := &handlers{deps: dependencies{AdminDeps: deps}, limiter: loginLimiter{attempts: make(map[string]loginAttempt)}}
 	r.GET("/healthz", func(c *gin.Context) {
 		c.Status(204)
 	})
-	r.POST("/api/v1/auth/callback", h.exchangeOAuthCode)
+	r.POST("/api/v1/auth/login", requireSameOrigin(), h.login)
+	r.POST("/api/v1/auth/logout", requireSameOrigin(), h.logout)
 
 	cfg := huma.DefaultConfig("PCC Config Center", "1.0.0")
 	if cfg.Components.SecuritySchemes == nil {
 		cfg.Components.SecuritySchemes = make(map[string]*huma.SecurityScheme)
 	}
-	cfg.Components.SecuritySchemes["bearerAuth"] = &huma.SecurityScheme{
-		Type:         "http",
-		Scheme:       "bearer",
-		BearerFormat: "JWT",
+	cfg.Components.SecuritySchemes["sessionCookie"] = &huma.SecurityScheme{
+		Type: "apiKey",
+		In:   "cookie",
+		Name: sessionCookieName,
 	}
-	cfg.Security = []map[string][]string{{"bearerAuth": {}}}
+	cfg.Security = []map[string][]string{{"sessionCookie": {}}}
 
 	// Register all Huma routes on an authenticated router group. This makes
 	// authentication default-deny for every current and future business route.
 	protected := r.Group("")
-	protected.Use(AuthMiddleware(deps.Auth.Authenticate))
+	protected.Use(AuthMiddleware(deps.Auth.Authenticate), requireSameOrigin(), func(c *gin.Context) {
+		c.Header("Cache-Control", "no-store")
+		c.Next()
+	})
 	api := humagin.NewWithGroup(r, protected, cfg)
 	h.register(api)
 	if err := registerSPA(r); err != nil {

@@ -1,7 +1,6 @@
 import { lazy, Suspense } from "react"
 import { BrowserRouter, Route, Routes } from "react-router-dom"
 
-import CallbackPage from "@/features/auth/callback-page"
 import LoginPage from "@/features/auth/login-page"
 import ProtectedRoute from "@/features/auth/protected-route"
 import AppLayout from "@/layouts/app-layout"
@@ -27,7 +26,6 @@ export function AppRouter() {
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
-        <Route path="/callback" element={<CallbackPage />} />
         <Route element={<ProtectedRoute />}>
           <Route element={<AppLayout />}>
             <Route path="/" element={<Suspense fallback={<RouteFallback />}><DashboardPage /></Suspense>} />

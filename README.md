@@ -9,7 +9,7 @@ PCC 是一个面向服务端应用的轻量配置中心，提供配置管理、�
 - 记录配置版本历史，支持查看和回滚。
 - 使用 Access Key 与 Secret 进行服务间鉴权。
 - Access Key 可绑定多个命名空间并设置只读或读写权限。
-- 使用 Casdoor 完成管理控制台登录。
+- 使用环境变量中的单一管理员账号登录管理控制台。
 - 提供独立 Go SDK，可将配置直接解析到结构体或读取单个字段。
 - 提供基于 Podman 的 Gitea 自动构建、部署、健康检查、回滚和清理流程。
 
@@ -21,7 +21,7 @@ PCC 是一个面向服务端应用的轻量配置中心，提供配置管理、�
 │   ├── cmd/server/         服务入口与生命周期
 │   ├── internal/app/       应用用例
 │   ├── internal/domain/    领域类型与错误
-│   ├── internal/infra/     数据库与 Casdoor 适配器
+│   ├── internal/infra/     数据库与管理员会话
 │   ├── internal/repository/持久化与事务
 │   └── internal/transport/ HTTP 路由、中间件和页面托管
 ├── web/                    React 管理控制台
@@ -36,12 +36,13 @@ PCC 是一个面向服务端应用的轻量配置中心，提供配置管理、�
 ## 鉴权与网络边界
 
 - 管理端监听 `PCC_ADMIN_ADDR`（默认 `:8080`），提供前端页面、
-  `POST /api/v1/auth/callback` 和 `/api/v1/admin/*`。
+  `POST /api/v1/auth/login`、`POST /api/v1/auth/logout` 和 `/api/v1/admin/*`。
 - 服务端监听 `PCC_RUNTIME_ADDR`（默认 `:8081`），只提供
   `/api/v1/runtime/*` 和健康检查。
 - 两个监听端口的路由相互隔离，管理端不注册 Runtime API，服务端也不
-  注册页面、OAuth 回调和管理 API。
-- `/api/v1/admin/*` 使用 Casdoor Bearer Token，并由后端统一鉴权。
+  注册页面、登录接口和管理 API。
+- `/api/v1/admin/*` 使用后端随机会话 Cookie 鉴权。Cookie 为 `HttpOnly`、`SameSite=Strict`，生产环境默认启用 `Secure`；写请求校验同源 `Origin`。
+- 会话在服务端内存保存 12 小时，退出登录或服务重启后立即失效。管理员密码仅由服务端环境变量读取，不进入镜像或前端构建产物。失败登录按连接来源限速。
 - `/api/v1/runtime/*` 使用 Access Key、Secret 和命名空间授权，并且
   生产环境只允许容器内网访问，不配置域名反向代理。
 - 前端路由守卫仅用于交互体验，不作为安全边界。
@@ -63,11 +64,9 @@ cp server/.env.example server/.env
 PCC_ADMIN_ADDR=:8080
 PCC_RUNTIME_ADDR=:8081
 PCC_DB_DSN=user:pass@tcp(127.0.0.1:3306)/pcc?charset=utf8mb4&parseTime=true&loc=Local
-PCC_CASDOOR_ENDPOINT=https://door.example.com
-PCC_CASDOOR_CLIENT_ID=pcc-web
-PCC_CASDOOR_CLIENT_SECRET=replace-me
-PCC_CASDOOR_ORGANIZATION=built-in
-PCC_CASDOOR_APPLICATION=app-pcc
+PCC_ADMIN_USERNAME=admin
+PCC_ADMIN_PASSWORD=replace-with-a-random-secret-of-at-least-16-characters
+PCC_COOKIE_SECURE=false
 ```
 
 启动后端：
@@ -79,7 +78,7 @@ go run ./cmd/server
 
 ### 前端配置
 
-复制示例文件并填写浏览器可公开的 Casdoor 参数：
+复制示例文件：
 
 ```sh
 cp web/.env.example web/.env
@@ -181,12 +180,7 @@ Containerfile 使用 Node 和 Go 多阶段构建。最终镜像：
 手工构建：
 
 ```sh
-podman build -f Containerfile -t pcc:latest \
-  --build-arg PCC_CASDOOR_ENDPOINT=https://door.example.com \
-  --build-arg PCC_CASDOOR_CLIENT_ID=pcc-web \
-  --build-arg PCC_CASDOOR_APPLICATION=app-pcc \
-  --build-arg PCC_CASDOOR_ORGANIZATION=built-in \
-  .
+podman build -f Containerfile -t pcc:latest .
 ```
 
 ## Gitea 自动部署
@@ -196,19 +190,15 @@ podman build -f Containerfile -t pcc:latest \
 ### Gitea Variables
 
 - `PCC_DEPLOY_NAME`：可选，镜像名和容器名，默认 `pcc`。
-- `PCC_CASDOOR_ENDPOINT`：必填，Casdoor 服务地址。
-- `PCC_CASDOOR_CLIENT_ID`：必填，Casdoor 客户端 ID。
-- `PCC_CASDOOR_ORGANIZATION`：必填，Casdoor 组织名。
-- `PCC_CASDOOR_APPLICATION`：必填，Casdoor 应用名。
 - `PCC_SNOWFLAKE_NODE_ID`：可选，雪花 ID 节点号，默认 `1`。
 
 ### Gitea Secrets
 
 - `PCC_DB_DSN`：数据库连接串。
-- `PCC_CASDOOR_CLIENT_SECRET`：Casdoor 客户端密钥。
+- `PCC_ADMIN_USERNAME`：唯一管理员用户名。
+- `PCC_ADMIN_PASSWORD`：唯一管理员密码，至少 16 字符，建议随机生成并仅存放于 Secrets。
 
-Casdoor 的公开参数只配置一份：构建镜像时映射为前端的
-`VITE_CASDOOR_*`，启动容器时作为后端的 `PCC_CASDOOR_*` 使用。
+生产环境需通过 HTTPS 访问管理端，以便浏览器发送默认 `Secure` 会话 Cookie。
 工作流通过当前进程环境将运行参数直接传给 Podman，不创建 `.env`
 文件或 Podman Secret，不在宿主机留下额外配置状态。
 

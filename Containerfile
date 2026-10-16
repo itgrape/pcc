@@ -7,16 +7,7 @@ RUN npm config set registry http://mirrors.cloud.tencent.com/npm/ && npm ci --in
 
 COPY web/ ./
 
-ARG PCC_CASDOOR_ENDPOINT
-ARG PCC_CASDOOR_CLIENT_ID
-ARG PCC_CASDOOR_APPLICATION=app-pcc
-ARG PCC_CASDOOR_ORGANIZATION=built-in
-
-RUN VITE_CASDOOR_URL="${PCC_CASDOOR_ENDPOINT}" \
-    VITE_CASDOOR_CLIENT_ID="${PCC_CASDOOR_CLIENT_ID}" \
-    VITE_CASDOOR_APP_NAME="${PCC_CASDOOR_APPLICATION}" \
-    VITE_CASDOOR_ORG="${PCC_CASDOOR_ORGANIZATION}" \
-    npm run build
+RUN npm run build
 
 FROM golang:1.25.5-alpine AS server-builder
 

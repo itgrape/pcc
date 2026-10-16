@@ -22,7 +22,7 @@ export function AuthLoadingScreen({ title, description }: AuthLoadingScreenProps
         </div>
         <div className="mt-5 flex items-center justify-center gap-1.5 text-[11px] text-muted-foreground">
           <ShieldCheck className="h-3.5 w-3.5 text-emerald-500" />
-          Casdoor 安全身份认证
+          PCC 管理员会话
         </div>
       </div>
     </div>

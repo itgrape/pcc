@@ -12,7 +12,7 @@ import (
 type Config struct {
 	Server    ServerConfig
 	DB        DBConfig
-	Casdoor   CasdoorConfig
+	AdminAuth AdminAuthConfig
 	Snowflake SnowflakeConfig
 }
 
@@ -28,12 +28,10 @@ type DBConfig struct {
 	ConnMaxLifetime time.Duration
 }
 
-type CasdoorConfig struct {
-	Endpoint     string
-	ClientID     string
-	ClientSecret string
-	Organization string
-	Application  string
+type AdminAuthConfig struct {
+	Username     string
+	Password     string
+	SecureCookie bool
 }
 
 type SnowflakeConfig struct {
@@ -54,12 +52,10 @@ func Load() (*Config, error) {
 			MaxIdleConns:    envInt("PCC_DB_MAX_IDLE_CONNS", 10),
 			ConnMaxLifetime: envDuration("PCC_DB_CONN_MAX_LIFETIME", time.Hour),
 		},
-		Casdoor: CasdoorConfig{
-			Endpoint:     env("PCC_CASDOOR_ENDPOINT", ""),
-			ClientID:     env("PCC_CASDOOR_CLIENT_ID", ""),
-			ClientSecret: env("PCC_CASDOOR_CLIENT_SECRET", ""),
-			Organization: env("PCC_CASDOOR_ORGANIZATION", ""),
-			Application:  env("PCC_CASDOOR_APPLICATION", ""),
+		AdminAuth: AdminAuthConfig{
+			Username:     env("PCC_ADMIN_USERNAME", ""),
+			Password:     env("PCC_ADMIN_PASSWORD", ""),
+			SecureCookie: env("PCC_COOKIE_SECURE", "true") != "false",
 		},
 		Snowflake: SnowflakeConfig{
 			NodeID: int64(envInt("PCC_SNOWFLAKE_NODE_ID", 1)),
@@ -69,10 +65,8 @@ func Load() (*Config, error) {
 	if cfg.DB.DSN == "" {
 		return nil, fmt.Errorf("config: PCC_DB_DSN is required")
 	}
-	if cfg.Casdoor.Endpoint == "" || cfg.Casdoor.ClientID == "" ||
-		cfg.Casdoor.ClientSecret == "" || cfg.Casdoor.Organization == "" ||
-		cfg.Casdoor.Application == "" {
-		return nil, fmt.Errorf("config: PCC_CASDOOR_ENDPOINT, PCC_CASDOOR_CLIENT_ID, PCC_CASDOOR_CLIENT_SECRET, PCC_CASDOOR_ORGANIZATION and PCC_CASDOOR_APPLICATION are required")
+	if cfg.AdminAuth.Username == "" || len(cfg.AdminAuth.Password) < 16 {
+		return nil, fmt.Errorf("config: PCC_ADMIN_USERNAME and PCC_ADMIN_PASSWORD (at least 16 characters) are required")
 	}
 	return cfg, nil
 }

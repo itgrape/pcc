@@ -45,7 +45,7 @@ func run() error {
 	}
 	store := repository.New(db)
 
-	auth, err := infra.NewCasdoor(cfg.Casdoor)
+	auth, err := infra.NewAdminAuth(cfg.AdminAuth)
 	if err != nil {
 		return err
 	}

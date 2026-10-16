@@ -23,7 +23,7 @@ CREATE TABLE `configs` (
   `format`       TINYINT      NOT NULL DEFAULT 1 COMMENT '配置格式：1=json, 2=yaml, 3=text, 4=properties',
   `content`      LONGTEXT     NOT NULL COMMENT '配置内容全文，支持任意格式文本',
   `description`  VARCHAR(255) NOT NULL DEFAULT '' COMMENT '配置说明',
-  `created_by`   VARCHAR(64)  NOT NULL DEFAULT '' COMMENT '创建人（Casdoor用户名）',
+  `created_by`   VARCHAR(64)  NOT NULL DEFAULT '' COMMENT '创建人（管理员用户名）',
   `updated_by`   VARCHAR(64)  NOT NULL DEFAULT '' COMMENT '最后更新人',
   `version`      INT UNSIGNED NOT NULL DEFAULT 1 COMMENT '配置内容版本号，每次更新自增',
   `created_at`   DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) COMMENT '创建时间(毫秒)',

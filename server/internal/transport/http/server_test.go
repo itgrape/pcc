@@ -12,15 +12,19 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/itgrape/pcc/server/internal/app"
+	"github.com/itgrape/pcc/server/internal/config"
 	"github.com/itgrape/pcc/server/internal/domain"
+	"github.com/itgrape/pcc/server/internal/infra"
 	"github.com/itgrape/pcc/server/internal/model"
 )
 
 type rejectingAuthenticator struct{}
 
-func (rejectingAuthenticator) ExchangeCode(string, string) (string, error) {
+func (rejectingAuthenticator) Login(string, string) (string, error) {
 	return "", errors.New("not implemented")
 }
+func (rejectingAuthenticator) Logout(string)      {}
+func (rejectingAuthenticator) SecureCookie() bool { return true }
 
 func (rejectingAuthenticator) Authenticate(string) (*domain.Identity, error) {
 	return nil, errors.New("unauthorized")
@@ -45,8 +49,8 @@ func (f runtimeConfigProviderFake) List(context.Context, string, string, string)
 	return []*model.Config{f.config}, nil
 }
 
-func (acceptingAuthenticator) Authenticate(authHeader string) (*domain.Identity, error) {
-	if authHeader != "Bearer valid-token" {
+func (acceptingAuthenticator) Authenticate(token string) (*domain.Identity, error) {
+	if token != "valid-token" {
 		return nil, errors.New("unauthorized")
 	}
 	return &domain.Identity{Username: "alice"}, nil
@@ -92,7 +96,7 @@ func TestAdminRoutesRequireAuthentication(t *testing.T) {
 	}
 }
 
-func TestOAuthCallbackIsPublic(t *testing.T) {
+func TestLoginIsPublic(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router, err := NewAdmin(AdminDeps{
 		Namespaces: new(app.NamespaceUsecase),
@@ -104,13 +108,72 @@ func TestOAuthCallbackIsPublic(t *testing.T) {
 		t.Fatalf("New() error = %v", err)
 	}
 
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/callback", strings.NewReader(`{}`))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{}`))
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Origin", "http://example.com")
 	recorder := httptest.NewRecorder()
 
 	router.ServeHTTP(recorder, req)
 	if recorder.Code != http.StatusBadRequest {
-		t.Fatalf("callback returned %d, want %d", recorder.Code, http.StatusBadRequest)
+		t.Fatalf("login returned %d, want %d", recorder.Code, http.StatusBadRequest)
+	}
+}
+
+func TestAdminLoginSessionAndLogout(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	auth, err := infra.NewAdminAuth(config.AdminAuthConfig{Username: "admin", Password: "a-long-test-password", SecureCookie: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	router, err := NewAdmin(AdminDeps{Namespaces: new(app.NamespaceUsecase), Configs: new(app.ConfigUsecase), AccessKeys: new(app.AccessKeyUsecase), Auth: auth})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	login := func(origin, password string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"admin","password":"`+password+`"}`))
+		req.Header.Set("Content-Type", "application/json")
+		if origin != "" {
+			req.Header.Set("Origin", origin)
+		}
+		out := httptest.NewRecorder()
+		router.ServeHTTP(out, req)
+		return out
+	}
+	if got := login("http://evil.example", "a-long-test-password").Code; got != http.StatusForbidden {
+		t.Fatalf("cross-origin login = %d", got)
+	}
+	if got := login("http://example.com", "wrong-password").Code; got != http.StatusUnauthorized {
+		t.Fatalf("wrong password = %d", got)
+	}
+	result := login("http://example.com", "a-long-test-password")
+	if result.Code != http.StatusOK {
+		t.Fatalf("login = %d: %s", result.Code, result.Body.String())
+	}
+	cookies := result.Result().Cookies()
+	if len(cookies) != 1 || !cookies[0].HttpOnly || !cookies[0].Secure || cookies[0].SameSite != http.SameSiteStrictMode {
+		t.Fatalf("unsafe session cookie: %+v", cookies)
+	}
+	userRequest := func() *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodGet, adminBasePath+"/user/info", nil)
+		req.AddCookie(cookies[0])
+		out := httptest.NewRecorder()
+		router.ServeHTTP(out, req)
+		return out
+	}
+	if got := userRequest().Code; got != http.StatusOK {
+		t.Fatalf("authenticated user = %d", got)
+	}
+	logout := httptest.NewRequest(http.MethodPost, "/api/v1/auth/logout", nil)
+	logout.Header.Set("Origin", "http://example.com")
+	logout.AddCookie(cookies[0])
+	out := httptest.NewRecorder()
+	router.ServeHTTP(out, logout)
+	if out.Code != http.StatusOK {
+		t.Fatalf("logout = %d", out.Code)
+	}
+	if got := userRequest().Code; got != http.StatusUnauthorized {
+		t.Fatalf("revoked session = %d", got)
 	}
 }
 
@@ -150,7 +213,7 @@ func TestAuthenticatedUserIsInjectedIntoRequestContext(t *testing.T) {
 	}
 
 	req := httptest.NewRequest(http.MethodGet, adminBasePath+"/user/info", nil)
-	req.Header.Set("Authorization", "Bearer valid-token")
+	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "valid-token"})
 	recorder := httptest.NewRecorder()
 
 	router.ServeHTTP(recorder, req)
@@ -225,7 +288,7 @@ func TestAdminAndRuntimeRoutesAreIsolated(t *testing.T) {
 
 	assertRouteNotFound(t, adminRouter, runtimeBasePath+"/namespaces/production/configs")
 	assertRouteNotFound(t, runtimeRouter, adminBasePath+"/user/info")
-	assertRouteNotFound(t, runtimeRouter, "/api/v1/auth/callback")
+	assertRouteNotFound(t, runtimeRouter, "/api/v1/auth/login")
 }
 
 func assertRouteNotFound(t *testing.T, router http.Handler, path string) {

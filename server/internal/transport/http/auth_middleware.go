@@ -17,7 +17,12 @@ const userContextKey contextKey = "authenticated-user"
 
 func AuthMiddleware(authenticate func(string) (*domain.Identity, error)) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		identity, err := authenticate(c.GetHeader("Authorization"))
+		cookie, cookieErr := c.Request.Cookie(sessionCookieName)
+		if cookieErr != nil {
+			c.AbortWithStatus(http.StatusUnauthorized)
+			return
+		}
+		identity, err := authenticate(cookie.Value)
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, types.Response{
 				Code:    http.StatusUnauthorized,
