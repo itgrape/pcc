@@ -190,6 +190,7 @@ podman build -f Containerfile -t pcc:latest .
 ### Gitea Variables
 
 - `PCC_DEPLOY_NAME`：可选，镜像名和容器名，默认 `pcc`。
+- `PCC_COOKIE_SECURE`：可选，默认 `true`。仅在可信的 HTTP 测试环境使用 `false`；正式环境保持 `true` 并通过 HTTPS 访问。
 - `PCC_SNOWFLAKE_NODE_ID`：可选，雪花 ID 节点号，默认 `1`。
 
 ### Gitea Secrets

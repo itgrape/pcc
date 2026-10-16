@@ -93,6 +93,10 @@ func (h *handlers) sessionCookie(token string, maxAge int) *http.Cookie {
 
 func (h *handlers) login(c *gin.Context) {
 	c.Header("Cache-Control", "no-store")
+	if h.deps.Auth.SecureCookie() && strings.HasPrefix(c.GetHeader("Origin"), "http://") {
+		c.JSON(http.StatusBadRequest, types.Response{Code: http.StatusBadRequest, Message: "HTTPS is required for login"})
+		return
+	}
 	ip, _, _ := net.SplitHostPort(c.Request.RemoteAddr)
 	if h.limiter.blocked(ip) {
 		c.Header("Retry-After", "900")

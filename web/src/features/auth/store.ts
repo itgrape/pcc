@@ -12,6 +12,12 @@ export interface AuthUser {
   [key: string]: unknown
 }
 
+export class SessionUnavailableError extends Error {
+  constructor() {
+    super("Login succeeded, but the session could not be restored")
+  }
+}
+
 interface AuthState {
   user: AuthUser | null
   isInitializing: boolean
@@ -45,7 +51,12 @@ export const useAuthStore = create<AuthState>()((set) => ({
 
   login: async (username, password) => {
     await apiClient.post("/api/v1/auth/login", { username, password })
-    const user = await requestUser()
+    let user: AuthUser
+    try {
+      user = await requestUser()
+    } catch {
+      throw new SessionUnavailableError()
+    }
     set({ user, isAuthenticated: true, isInitializing: false })
   },
 

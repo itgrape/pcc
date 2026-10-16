@@ -110,7 +110,7 @@ func TestLoginIsPublic(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{}`))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Origin", "http://example.com")
+	req.Header.Set("Origin", "https://example.com")
 	recorder := httptest.NewRecorder()
 
 	router.ServeHTTP(recorder, req)
@@ -143,10 +143,13 @@ func TestAdminLoginSessionAndLogout(t *testing.T) {
 	if got := login("http://evil.example", "a-long-test-password").Code; got != http.StatusForbidden {
 		t.Fatalf("cross-origin login = %d", got)
 	}
-	if got := login("http://example.com", "wrong-password").Code; got != http.StatusUnauthorized {
+	if got := login("http://example.com", "a-long-test-password").Code; got != http.StatusBadRequest {
+		t.Fatalf("HTTP login with Secure cookies = %d", got)
+	}
+	if got := login("https://example.com", "wrong-password").Code; got != http.StatusUnauthorized {
 		t.Fatalf("wrong password = %d", got)
 	}
-	result := login("http://example.com", "a-long-test-password")
+	result := login("https://example.com", "a-long-test-password")
 	if result.Code != http.StatusOK {
 		t.Fatalf("login = %d: %s", result.Code, result.Body.String())
 	}
@@ -165,7 +168,7 @@ func TestAdminLoginSessionAndLogout(t *testing.T) {
 		t.Fatalf("authenticated user = %d", got)
 	}
 	logout := httptest.NewRequest(http.MethodPost, "/api/v1/auth/logout", nil)
-	logout.Header.Set("Origin", "http://example.com")
+	logout.Header.Set("Origin", "https://example.com")
 	logout.AddCookie(cookies[0])
 	out := httptest.NewRecorder()
 	router.ServeHTTP(out, logout)
@@ -174,6 +177,30 @@ func TestAdminLoginSessionAndLogout(t *testing.T) {
 	}
 	if got := userRequest().Code; got != http.StatusUnauthorized {
 		t.Fatalf("revoked session = %d", got)
+	}
+}
+
+func TestHTTPLoginWhenSecureCookieIsExplicitlyDisabled(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	auth, err := infra.NewAdminAuth(config.AdminAuthConfig{Username: "admin", Password: "a-long-test-password", SecureCookie: false})
+	if err != nil {
+		t.Fatal(err)
+	}
+	router, err := NewAdmin(AdminDeps{Namespaces: new(app.NamespaceUsecase), Configs: new(app.ConfigUsecase), AccessKeys: new(app.AccessKeyUsecase), Auth: auth})
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"admin","password":"a-long-test-password"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Origin", "http://example.com")
+	out := httptest.NewRecorder()
+	router.ServeHTTP(out, req)
+	if out.Code != http.StatusOK {
+		t.Fatalf("HTTP login = %d: %s", out.Code, out.Body.String())
+	}
+	cookies := out.Result().Cookies()
+	if len(cookies) != 1 || cookies[0].Secure || !cookies[0].HttpOnly || cookies[0].SameSite != http.SameSiteStrictMode {
+		t.Fatalf("unexpected HTTP test cookie: %+v", cookies)
 	}
 }
 
